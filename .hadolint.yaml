@@ -1,0 +1,12 @@
+# hadolint config for the chrysalis images.
+#
+# Every entry below is a deliberate choice, not a blanket mute. Anything not
+# listed here stays enforced. If you add a rule, say why in a comment.
+ignored:
+  - DL3002  # images run as root on purpose (these are build/CI images, not services)
+  - DL3008  # we deliberately track the latest apt packages; pinning every one defeats that
+  - DL3015  # --no-install-recommends is left off the inherited apt block by design
+  - DL3003  # inherited single-RUN style; `cd /opt` inside it is fine
+  - DL3047  # wget verbosity is cosmetic here
+  - DL4006  # `set -o pipefail` would break the `yes | sdkmanager` idiom these layers rely on
+  - DL3007  # flutter image FROM android-sdk:latest is our own rolling base, on purpose
