@@ -1,7 +1,10 @@
-########### TOOLS #################
+# Android SDK image: Ubuntu + cmdline-tools, platform-tools, build-tools, a platform.
+# This is the base layer the flutter image builds FROM. The SDK build tools are
+# x86-64-only on Linux; see ../APPENDIX.md#arm64-android-build-limitation.
 FROM ubuntu:24.04
 
-LABEL org.opencontainers.image.source=https://github.com/cirruslabs/docker-images-android
+LABEL org.opencontainers.image.source=https://github.com/LahaLuhem/chrysalis \
+      org.opencontainers.image.description="Android SDK (cmdline-tools, platform-tools, build-tools 36.0.0, platform android-36) on Ubuntu 24.04"
 
 USER root
 
@@ -16,9 +19,10 @@ ENV ANDROID_SDK_ROOT=$ANDROID_HOME \
 # comes from https://developer.android.com/studio/#command-line-tools-only
 ENV ANDROID_SDK_TOOLS_VERSION=13114758
 
-RUN set -o xtrace \
-    && cd /opt \
-    && apt-get update \
+# --- System packages -------------------------------------------------------
+# JDK + build/runtime deps. The X11/emulator libs and ruby/lftp are inherited
+# from upstream (cirruslabs).
+RUN apt-get update \
     && apt-get install -y jq \
     && apt-get install -y openjdk-21-jdk \
     && apt-get install -y sudo wget zip unzip git openssh-client curl bc software-properties-common build-essential ruby-full ruby-bundler libstdc++6 libpulse0 libglu1-mesa locales lcov libsqlite3-dev --no-install-recommends \
@@ -27,33 +31,37 @@ RUN set -o xtrace \
     && apt-get install -y -qq xxd \
     && apt-get install -y lftp \
     && apt-get install -qq -y sqlite3 libsqlite3-dev \
-    && rm -rf /var/lib/apt/lists/* \
-    && sh -c 'echo "en_US.UTF-8 UTF-8" > /etc/locale.gen' \
+    && rm -rf /var/lib/apt/lists/*
+
+# --- Locale ----------------------------------------------------------------
+RUN echo "en_US.UTF-8 UTF-8" > /etc/locale.gen \
     && locale-gen \
-    && update-locale LANG=en_US.UTF-8 \
-    && wget -q https://dl.google.com/android/repository/commandlinetools-linux-${ANDROID_SDK_TOOLS_VERSION}_latest.zip -O android-sdk-tools.zip \
-    && mkdir -p ${ANDROID_HOME}/cmdline-tools/ \
-    && unzip -q android-sdk-tools.zip -d ${ANDROID_HOME}/cmdline-tools/ \
-    && mv ${ANDROID_HOME}/cmdline-tools/cmdline-tools ${ANDROID_HOME}/cmdline-tools/latest \
-    && chown -R root:root $ANDROID_HOME \
-    && rm android-sdk-tools.zip \
-    && echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers \
+    && update-locale LANG=en_US.UTF-8
+
+# --- Android command-line tools --------------------------------------------
+RUN cd /opt \
+    && wget -q "https://dl.google.com/android/repository/commandlinetools-linux-${ANDROID_SDK_TOOLS_VERSION}_latest.zip" -O android-sdk-tools.zip \
+    && mkdir -p "${ANDROID_HOME}/cmdline-tools/" \
+    && unzip -q android-sdk-tools.zip -d "${ANDROID_HOME}/cmdline-tools/" \
+    && mv "${ANDROID_HOME}/cmdline-tools/cmdline-tools" "${ANDROID_HOME}/cmdline-tools/latest" \
+    && chown -R root:root "$ANDROID_HOME" \
+    && rm android-sdk-tools.zip
+
+# --- Licenses + platform-tools ---------------------------------------------
+RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers \
     && yes | sdkmanager --licenses \
     && wget -O /usr/bin/android-wait-for-emulator https://raw.githubusercontent.com/travis-ci/travis-cookbooks/master/community-cookbooks/android-sdk/files/default/android-wait-for-emulator \
     && chmod +x /usr/bin/android-wait-for-emulator \
-    && touch /root/.android/repositories.cfg \
-    && sdkmanager platform-tools \
     && mkdir -p /root/.android \
     && touch /root/.android/repositories.cfg \
+    && sdkmanager platform-tools \
     && git config --global user.email "support@cirruslabs.org" \
     && git config --global user.name "Cirrus CI"
 
 # emulator is not available on linux/arm64 (https://issuetracker.google.com/issues/227219818)
 RUN if [ "$(uname -m)" = "x86_64" ]; then sdkmanager emulator ; fi
 
-
-################# ANDROID SDK ################
-
+# --- Android platform + build-tools ----------------------------------------
 # https://developer.android.com/studio/releases/build-tools
 ENV ANDROID_PLATFORM_VERSION=36
 ENV ANDROID_BUILD_TOOLS_VERSION=36.0.0
