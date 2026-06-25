@@ -1,4 +1,4 @@
-FROM ghcr.io/davidmartos96/android-sdk:latest
+FROM ghcr.io/lahaluhem/android-sdk:latest
 
 USER root
 
