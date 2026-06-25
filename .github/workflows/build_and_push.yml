@@ -1,69 +1,245 @@
 name: Build Android + Flutter Images
+
 on:
   push:
     branches:
-      - "**"
+      - master
+  pull_request:
   workflow_dispatch:
+
+# Publish only on master pushes or a manual run; pull requests build-validate
+# (both arches) without pushing. Verify a feature branch with:
+#   gh workflow run build_and_push.yml --ref <branch>
 env:
-  REGISTRY: ghcr.io/davidmartos96
+  REGISTRY: ghcr.io/lahaluhem
+
+# Serialise publishes per ref so concurrent runs don't race on the shared
+# tags (android-sdk:latest, flutter:stable). Don't cancel an in-flight publish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  build:
+  prepare:
     runs-on: ubuntu-latest
+    outputs:
+      flutter_version: ${{ steps.vars.outputs.flutter_version }}
+      docker_tag: ${{ steps.vars.outputs.docker_tag }}
+      push: ${{ steps.vars.outputs.push }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Load version variables
+        id: vars
+        run: |
+          source versions.env
+          echo "flutter_version=$FLUTTER_VERSION" >> "$GITHUB_OUTPUT"
+          echo "docker_tag=$DOCKER_TAG" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.ref }}" = "refs/heads/master" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "push=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "push=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # =========================================================================
+  # ANDROID SDK — multi-arch base image (must be a published manifest list
+  # before the Flutter image is built, so each per-arch Flutter build resolves
+  # the matching base automatically).
+  # =========================================================================
+  build-android:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - linux/amd64
+          - linux/arm64
+    runs-on: ${{ matrix.platform == 'linux/arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     permissions:
       contents: read
       packages: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
-      - name: Load version variables
+      - name: Prepare platform pair
         run: |
-          source versions.env
-          echo "DOCKER_TAG=$DOCKER_TAG" >> "$GITHUB_ENV"
-          echo "FLUTTER_VERSION=$FLUTTER_VERSION" >> "$GITHUB_ENV"
+          platform=${{ matrix.platform }}
+          echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
 
-      # - name: Set up QEMU
-      #   uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Login to GHCR
-        if: github.ref == 'refs/heads/master'
-        uses: docker/login-action@v3
+        if: needs.prepare.outputs.push == 'true'
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # =========================
-      # ANDROID IMAGE
-      # =========================
-      - name: Build Android SDK (no push except master)
-        uses: docker/build-push-action@v5
+      - name: Build (and push by digest on publish runs)
+        id: build
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: sdk/Dockerfile.android
-          push: ${{ github.ref == 'refs/heads/master' }}
-          tags: ${{ env.REGISTRY }}/android-sdk:latest
-          platforms: linux/amd64
-          cache-from: type=gha,scope=android
-          cache-to: type=gha,scope=android,mode=max
-          
-      # =========================
-      # FLUTTER IMAGE
-      # =========================
-      - name: Build Flutter image (no push except master)
-        uses: docker/build-push-action@v5
+          platforms: ${{ matrix.platform }}
+          # Disable provenance/SBOM attestations: they add `unknown/unknown`
+          # entries to the manifest list that muddy `docker manifest inspect`.
+          provenance: false
+          outputs: ${{ needs.prepare.outputs.push == 'true' && format('type=image,name={0}/android-sdk,push-by-digest=true,name-canonical=true,push=true', env.REGISTRY) || 'type=image,push=false' }}
+          cache-from: type=gha,scope=android-${{ env.PLATFORM_PAIR }}
+          cache-to: type=gha,scope=android-${{ env.PLATFORM_PAIR }},mode=max
+
+      - name: Export digest
+        if: needs.prepare.outputs.push == 'true'
+        run: |
+          mkdir -p "${{ runner.temp }}/digests"
+          digest="${{ steps.build.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        if: needs.prepare.outputs.push == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: digests-android-${{ env.PLATFORM_PAIR }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge-android:
+    needs: [prepare, build-android]
+    if: needs.prepare.outputs.push == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v8
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-android-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create manifest list and push
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          # shellcheck disable=SC2046  # intentional word splitting over the digest files
+          docker buildx imagetools create -t ${{ env.REGISTRY }}/android-sdk:latest \
+            $(printf '${{ env.REGISTRY }}/android-sdk@sha256:%s ' *)
+
+      - name: Inspect
+        run: docker buildx imagetools inspect ${{ env.REGISTRY }}/android-sdk:latest
+
+  # =========================================================================
+  # FLUTTER — built FROM the android-sdk manifest list above, so each per-arch
+  # build pulls the matching base. Only runs on publish runs (it depends on the
+  # pushed android-sdk base via merge-android).
+  # =========================================================================
+  build-flutter:
+    needs: [prepare, merge-android]
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - linux/amd64
+          - linux/arm64
+    runs-on: ${{ matrix.platform == 'linux/arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Prepare platform pair
+        run: |
+          platform=${{ matrix.platform }}
+          echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: sdk/Dockerfile.flutter
-          push: ${{ github.ref == 'refs/heads/master' }}
-          tags: |
-            ${{ env.REGISTRY }}/flutter:${{ env.FLUTTER_VERSION }}
-            ${{ env.REGISTRY }}/flutter:${{ env.DOCKER_TAG }}
+          platforms: ${{ matrix.platform }}
+          provenance: false
           build-args: |
-            flutter_version=${{ env.FLUTTER_VERSION }}
-          platforms: linux/amd64
-          cache-from: type=gha,scope=flutter
-          cache-to: type=gha,scope=flutter,mode=max
+            flutter_version=${{ needs.prepare.outputs.flutter_version }}
+          outputs: type=image,name=${{ env.REGISTRY }}/flutter,push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=flutter-${{ env.PLATFORM_PAIR }}
+          cache-to: type=gha,scope=flutter-${{ env.PLATFORM_PAIR }},mode=max
+
+      - name: Export digest
+        run: |
+          mkdir -p "${{ runner.temp }}/digests"
+          digest="${{ steps.build.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v7
+        with:
+          name: digests-flutter-${{ env.PLATFORM_PAIR }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge-flutter:
+    needs: [prepare, build-flutter]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v8
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-flutter-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create manifest list and push
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          # shellcheck disable=SC2046  # intentional word splitting over the digest files
+          docker buildx imagetools create \
+            -t ${{ env.REGISTRY }}/flutter:${{ needs.prepare.outputs.flutter_version }} \
+            -t ${{ env.REGISTRY }}/flutter:${{ needs.prepare.outputs.docker_tag }} \
+            $(printf '${{ env.REGISTRY }}/flutter@sha256:%s ' *)
+
+      - name: Inspect
+        run: docker buildx imagetools inspect ${{ env.REGISTRY }}/flutter:${{ needs.prepare.outputs.docker_tag }}
