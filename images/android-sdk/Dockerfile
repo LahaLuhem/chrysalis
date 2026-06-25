@@ -1,12 +1,12 @@
 # Android SDK image: Ubuntu + cmdline-tools, platform-tools, build-tools, a platform.
 # This is the base layer the flutter image builds FROM. The SDK build tools are
-# x86-64-only on Linux; see ../APPENDIX.md#arm64-android-build-limitation.
+# x86-64-only on Linux; see ../../APPENDIX.md#arm64-android-build-limitation.
 #
 # Layers (see "What's in the image" in the README):
 #   Base             ubuntu:24.04
 #   Build toolchain  JDK + the Android SDK (everything below)
 #   Convenience (DX) jq, lcov
-# The flutter image (Dockerfile.flutter) adds the Flutter layer on top.
+# The flutter image adds the Flutter layer on top.
 FROM ubuntu:24.04
 
 LABEL org.opencontainers.image.source=https://github.com/LahaLuhem/chrysalis \
