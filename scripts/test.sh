@@ -56,7 +56,7 @@ run_lint() {
   need shellcheck 'brew install shellcheck'
 
   section 'hadolint (Dockerfiles)'
-  if hadolint sdk/Dockerfile.android sdk/Dockerfile.flutter; then ok 'Dockerfiles clean'; else bad 'hadolint'; fi
+  if hadolint images/android-sdk/Dockerfile images/flutter/Dockerfile; then ok 'Dockerfiles clean'; else bad 'hadolint'; fi
 
   section 'actionlint (workflows)'
   if actionlint .github/workflows/*.yml; then ok 'workflows clean'; else bad 'actionlint'; fi
@@ -91,7 +91,7 @@ run_image() {
   local flutter_img='chrysalis-test/flutter:local'
 
   section 'build android-sdk (host arch)'
-  if docker buildx build --load -t "$android_img" -f sdk/Dockerfile.android . >"$log" 2>&1; then
+  if docker buildx build --load -t "$android_img" images/android-sdk >"$log" 2>&1; then
     ok 'built android-sdk'
   else
     bad 'android-sdk build'; tail -n 30 "$log"; rm -f "$log"; return
@@ -101,7 +101,7 @@ run_image() {
   if docker buildx build --load \
        --build-context "$base=docker-image://$android_img" \
        --build-arg "flutter_version=$ver" \
-       -t "$flutter_img" -f sdk/Dockerfile.flutter . >"$log" 2>&1; then
+       -t "$flutter_img" images/flutter >"$log" 2>&1; then
     ok 'built flutter'
   else
     bad 'flutter build'; tail -n 30 "$log"; rm -f "$log"; return
@@ -109,14 +109,14 @@ run_image() {
   rm -f "$log"
 
   section 'container-structure-test: android-sdk'
-  if container-structure-test test --image "$android_img" --config test/structure/android-sdk.yaml; then
+  if container-structure-test test --image "$android_img" --config images/android-sdk/structure-test.yaml; then
     ok 'android-sdk structure'
   else
     bad 'android-sdk structure'
   fi
 
   section 'container-structure-test: flutter'
-  if container-structure-test test --image "$flutter_img" --config test/structure/flutter.yaml; then
+  if container-structure-test test --image "$flutter_img" --config images/flutter/structure-test.yaml; then
     ok 'flutter structure'
   else
     bad 'flutter structure'
@@ -129,7 +129,7 @@ run_image() {
     bad "image does not report Flutter $ver"
   fi
 
-  # The Android emulator is x86_64-only; sdk/Dockerfile.android skips it on arm64.
+  # The Android emulator is x86_64-only; images/android-sdk/Dockerfile skips it on arm64.
   section 'android emulator arch invariant'
   if [ "$arch" = "arm64" ] || [ "$arch" = "aarch64" ]; then
     if docker run --rm "$android_img" sh -c '! test -d /opt/android-sdk-linux/emulator'; then
@@ -184,7 +184,7 @@ run_multiarch() {
 
   section 'build android-sdk for amd64 + arm64 (amd64 emulated, slow)'
   if docker buildx build --builder "$builder" --platform linux/amd64,linux/arm64 --provenance=false \
-       -f sdk/Dockerfile.android --output "type=oci,dest=$oci" . >"$log" 2>&1; then
+       --output "type=oci,dest=$oci" images/android-sdk >"$log" 2>&1; then
     ok 'built both arches'
   else
     bad 'android-sdk multi-arch build'; tail -n 30 "$log"; rm -rf "$tmpd"; return

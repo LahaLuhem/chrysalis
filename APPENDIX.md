@@ -104,7 +104,7 @@ a *native* arm64 Linux image **cannot build Android apps**.
   artifact, and a merge job assembles the per-arch digests into one manifest list with
   `docker buildx imagetools create`. This is the canonical Docker pattern for distributing a
   multi-platform build across native runners.
-- **`android-sdk` is published before `flutter` builds.** Because `Dockerfile.flutter` is
+- **`android-sdk` is published before `flutter` builds.** Because `images/flutter/Dockerfile` is
   `FROM ghcr.io/lahaluhem/android-sdk:latest`, that tag must already be a manifest list when
   the `flutter` matrix runs, so each per-arch `flutter` build pulls the matching base
   automatically. Hence the job order build-android → merge-android → build-flutter →
