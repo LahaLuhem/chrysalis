@@ -1,0 +1,32 @@
+schemaVersion: 2.0.0
+
+# Structural assertions for the android-sdk image. Component versions
+# (build-tools 36.0.0, platform android-36) mirror sdk/Dockerfile.android; bump
+# them here in lockstep if the Dockerfile changes.
+
+metadataTest:
+  envVars:
+    - key: ANDROID_HOME
+      value: /opt/android-sdk-linux
+    - key: ANDROID_SDK_ROOT
+      value: /opt/android-sdk-linux
+
+fileExistenceTests:
+  - name: cmdline-tools (sdkmanager)
+    path: /opt/android-sdk-linux/cmdline-tools/latest/bin/sdkmanager
+    shouldExist: true
+  - name: platform-tools (adb)
+    path: /opt/android-sdk-linux/platform-tools/adb
+    shouldExist: true
+  - name: build-tools 36.0.0 (aapt2)
+    path: /opt/android-sdk-linux/build-tools/36.0.0/aapt2
+    shouldExist: true
+  - name: platform android-36 (android.jar)
+    path: /opt/android-sdk-linux/platforms/android-36/android.jar
+    shouldExist: true
+
+commandTests:
+  - name: sdkmanager is runnable
+    command: sdkmanager
+    args: ['--version']
+    exitCode: 0

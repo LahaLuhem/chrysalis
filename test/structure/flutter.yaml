@@ -1,0 +1,18 @@
+schemaVersion: 2.0.0
+
+# Structural assertions for the flutter image. The exact Flutter version is NOT
+# pinned here on purpose: it tracks versions.env (auto-bumped), so scripts/test.sh
+# checks the exact version separately. Here we just prove the toolchain runs.
+
+commandTests:
+  - name: flutter --version reports Flutter and Dart
+    command: flutter
+    args: ['--version']
+    exitCode: 0
+    expectedOutput:
+      - 'Flutter \d+\.\d+\.\d+'
+      - 'Dart \d+\.\d+\.\d+'
+  - name: dart is runnable
+    command: dart
+    args: ['--version']
+    exitCode: 0
