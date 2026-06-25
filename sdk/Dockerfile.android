@@ -1,6 +1,12 @@
 # Android SDK image: Ubuntu + cmdline-tools, platform-tools, build-tools, a platform.
 # This is the base layer the flutter image builds FROM. The SDK build tools are
 # x86-64-only on Linux; see ../APPENDIX.md#arm64-android-build-limitation.
+#
+# Layers (see "What's in the image" in the README):
+#   Base             ubuntu:24.04
+#   Build toolchain  JDK + the Android SDK (everything below)
+#   Convenience (DX) jq, lcov
+# The flutter image (Dockerfile.flutter) adds the Flutter layer on top.
 FROM ubuntu:24.04
 
 LABEL org.opencontainers.image.source=https://github.com/LahaLuhem/chrysalis \
@@ -19,20 +25,22 @@ ENV ANDROID_SDK_ROOT=$ANDROID_HOME \
 # comes from https://developer.android.com/studio/#command-line-tools-only
 ENV ANDROID_SDK_TOOLS_VERSION=13114758
 
-# --- System packages -------------------------------------------------------
-# JDK + build/runtime deps for Android builds.
+# --- Build toolchain: system packages --------------------------------------
+# JDK + the deps to fetch and build with the Android SDK. jq and lcov are the
+# Convenience (DX) tools (see "What's in the image" in the README).
 RUN apt-get update \
-    && apt-get install -y jq \
     && apt-get install -y openjdk-21-jdk \
-    && apt-get install -y sudo wget zip unzip git openssh-client curl build-essential libstdc++6 locales lcov --no-install-recommends \
+    && apt-get install -y sudo wget zip unzip git openssh-client curl build-essential libstdc++6 locales --no-install-recommends \
+    # Convenience (DX): jq (JSON), lcov (coverage reports)
+    && apt-get install -y jq lcov --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-# --- Locale ----------------------------------------------------------------
+# --- Build toolchain: locale -----------------------------------------------
 RUN echo "en_US.UTF-8 UTF-8" > /etc/locale.gen \
     && locale-gen \
     && update-locale LANG=en_US.UTF-8
 
-# --- Android command-line tools --------------------------------------------
+# --- Build toolchain: Android command-line tools ---------------------------
 RUN cd /opt \
     && wget -q "https://dl.google.com/android/repository/commandlinetools-linux-${ANDROID_SDK_TOOLS_VERSION}_latest.zip" -O android-sdk-tools.zip \
     && mkdir -p "${ANDROID_HOME}/cmdline-tools/" \
@@ -41,7 +49,7 @@ RUN cd /opt \
     && chown -R root:root "$ANDROID_HOME" \
     && rm android-sdk-tools.zip
 
-# --- Licenses + platform-tools ---------------------------------------------
+# --- Build toolchain: licenses + platform-tools ----------------------------
 RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers \
     && yes | sdkmanager --licenses \
     && mkdir -p /root/.android \
@@ -51,7 +59,7 @@ RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers \
 # emulator is not available on linux/arm64 (https://issuetracker.google.com/issues/227219818)
 RUN if [ "$(uname -m)" = "x86_64" ]; then sdkmanager emulator ; fi
 
-# --- Android platform + build-tools ----------------------------------------
+# --- Build toolchain: Android platform + build-tools -----------------------
 # https://developer.android.com/studio/releases/build-tools
 ENV ANDROID_PLATFORM_VERSION=36
 ENV ANDROID_BUILD_TOOLS_VERSION=36.0.0
