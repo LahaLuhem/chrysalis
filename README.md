@@ -1,52 +1,77 @@
-# Docker Images for [Flutter](https://flutter.dev/)
+# [Flutter](https://flutter.dev/) + Android SDK Docker images
 
-Multi-arch (`linux/amd64` + `linux/arm64`) Docker images bundling
-[Flutter](https://flutter.dev/) and the Android SDK, published to GHCR and
-tracking the latest stable Flutter release.
+Docker images with Flutter and the Android SDK baked in, for both `linux/amd64`
+and `linux/arm64`. They follow the latest stable Flutter and live on GHCR.
 
-These are standard OCI images — use them with any CI system or OCI runtime.
+They're plain OCI images, so they run anywhere: any CI, any container runtime.
 
 ## Images
 
 | Image | Tags |
 | --- | --- |
-| [`ghcr.io/lahaluhem/flutter`](https://github.com/LahaLuhem/chrysalis/pkgs/container/flutter) | `stable`, `<flutter-version>` (e.g. `3.44.4`) |
+| [`ghcr.io/lahaluhem/flutter`](https://github.com/LahaLuhem/chrysalis/pkgs/container/flutter) | `stable`, plus the exact version (`3.44.4`, ...) |
 | [`ghcr.io/lahaluhem/android-sdk`](https://github.com/LahaLuhem/chrysalis/pkgs/container/android-sdk) | `latest` |
 
-Both are published as multi-arch manifest lists, so `docker pull` (or any
-runtime) automatically resolves the variant matching the host architecture —
-no QEMU emulation needed on `arm64` hosts (Apple Silicon, AWS Graviton, etc.).
+Every tag is a multi-arch manifest, so `docker pull` grabs the variant matching
+your machine on its own.
 
-## Usage
+## Quick start
 
-```bash
-docker run --rm -it -v ${PWD}:/build --workdir /build ghcr.io/lahaluhem/flutter:stable flutter test
-```
-
-The example above mounts the current working directory and runs `flutter test`.
-
-Pin to a specific Flutter version instead of `stable`:
+Run your tests against the current directory:
 
 ```bash
-docker run --rm -it -v ${PWD}:/build --workdir /build ghcr.io/lahaluhem/flutter:3.44.4 flutter build apk --debug
+docker run --rm -it -v ${PWD}:/build -w /build ghcr.io/lahaluhem/flutter:stable flutter test
 ```
 
-Force a specific architecture (defaults to the host's):
+Want a specific Flutter version instead of `stable`? Swap the tag:
+
+```bash
+docker run --rm -it -v ${PWD}:/build -w /build ghcr.io/lahaluhem/flutter:3.44.4 flutter test
+```
+
+Pin the platform when you need to (otherwise it follows your host):
 
 ```bash
 docker run --rm -it --platform linux/arm64 ghcr.io/lahaluhem/flutter:stable flutter doctor
 ```
 
-> The Android emulator is **not** included in the `arm64` image — it is
-> [unavailable for `linux/arm64`](https://issuetracker.google.com/issues/227219818).
-> Building APKs/AABs works on both architectures.
+## Architecture support
 
-## Maintenance
+Almost everything runs natively on both arches. The one catch is building
+Android apps on arm64.
 
-A scheduled workflow checks for new stable Flutter releases and opens a PR
-bumping [`versions.env`](versions.env); merging it republishes the images.
+| Workload | amd64 | arm64 |
+| --- | --- | --- |
+| `flutter` / `dart`, `flutter test`, `flutter analyze`, `pub`, web builds | native | native |
+| Android builds (`flutter build apk` / `appbundle`) | native | needs x86 emulation |
 
-This repo is a maintained, multi-arch continuation of
-[`davidmartos96/docker-images-flutter`](https://github.com/davidmartos96/docker-images-flutter)
-(itself a fork of the now-EOL
-[`cirruslabs/docker-images-flutter`](https://github.com/cirruslabs/docker-images-flutter)).
+<details>
+<summary>Why arm64 Android builds need emulation</summary>
+
+Google only publishes the Linux Android SDK build tools (`aapt2`, `cmake`,
+`ninja`, the NDK, `adb`) as x86-64 binaries. There's no arm64 Linux build, so on
+a native arm64 host an APK/AAB build eventually reaches for a tool it can't run,
+and fails.
+
+The fix is to register x86 emulation on the host once (Docker Desktop comes with
+it already):
+
+```bash
+docker run --privileged --rm tonistiigi/binfmt --install amd64
+```
+
+After that `flutter build apk` works on arm64 too. It's just slower, since those
+few tools run emulated while everything else stays native. The full story is in
+[APPENDIX.md](APPENDIX.md#arm64-android-build-limitation).
+
+</details>
+
+> **Note:** the Android *emulator* isn't in the arm64 image either. Google
+> doesn't ship it for [`linux/arm64`](https://issuetracker.google.com/issues/227219818).
+
+## Staying current
+
+[Renovate](https://docs.renovatebot.com) checks weekly for new stable Flutter releases
+and opens a PR bumping [`versions.env`](versions.env). Merge it, and the images rebuild on
+the new version. The same config keeps the GitHub Actions pins and the `ubuntu` base image
+current.
