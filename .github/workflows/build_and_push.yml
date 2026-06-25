@@ -13,7 +13,7 @@ on:
 env:
   REGISTRY: ghcr.io/lahaluhem
 
-# Serialise publishes per ref so concurrent runs don't race on the shared
+# Serialize publishes per ref so concurrent runs don't race on the shared
 # tags (android-sdk:latest, flutter:stable). Don't cancel an in-flight publish.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -83,8 +83,7 @@ jobs:
         id: build
         uses: docker/build-push-action@v7
         with:
-          context: .
-          file: sdk/Dockerfile.android
+          context: images/android-sdk
           platforms: ${{ matrix.platform }}
           # Disable provenance/SBOM attestations: they add `unknown/unknown`
           # entries to the manifest list that muddy `docker manifest inspect`.
@@ -184,8 +183,7 @@ jobs:
         id: build
         uses: docker/build-push-action@v7
         with:
-          context: .
-          file: sdk/Dockerfile.flutter
+          context: images/flutter
           platforms: ${{ matrix.platform }}
           provenance: false
           build-args: |

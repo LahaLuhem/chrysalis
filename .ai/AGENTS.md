@@ -49,16 +49,23 @@ Why it exists: [`APPENDIX.md#why-multi-arch`](../APPENDIX.md#why-multi-arch).
 ```
 chrysalis/
 ├── versions.env                     DOCKER_TAG=stable, FLUTTER_VERSION=<x.y.z> (pinned inputs)
-├── sdk/
-│   ├── Dockerfile.android           ubuntu:24.04 + Android cmdline/platform/build tools;
-│   │                                arm64-aware (skips `sdkmanager emulator` on arm64)
-│   └── Dockerfile.flutter           FROM ghcr.io/lahaluhem/android-sdk:latest; clones Flutter
+├── images/
+│   ├── android-sdk/                 ubuntu:24.04 + Android cmdline/platform/build tools
+│   │   ├── Dockerfile               (arm64-aware: skips `sdkmanager emulator` on arm64)
+│   │   ├── structure-test.yaml      container-structure-test assertions
+│   │   └── .dockerignore
+│   └── flutter/                     FROM android-sdk; clones Flutter at FLUTTER_VERSION
+│       ├── Dockerfile
+│       ├── structure-test.yaml
+│       └── .dockerignore
 ├── scripts/
-│   └── update_flutter_versions.sh   Fetches latest stable Flutter, rewrites versions.env
+│   ├── update_flutter_versions.sh   Fetches latest stable Flutter, rewrites versions.env
+│   └── test.sh                      Local test suite (lint / image / multiarch / all)
 ├── .github/workflows/
 │   ├── build_and_push.yml           Multi-arch build + publish (matrix → digest → merge)
 │   └── check_flutter_versions.yml   Every 2h: run the script, open a version-bump PR
-├── README.md                        Image names, multi-arch note, usage
+├── .hadolint.yaml                   hadolint rules (deliberate ignores)
+├── README.md                        Image names, what's inside, usage
 ├── APPENDIX.md                      Design rationale (anchor-keyed)
 └── .ai/                             This file + CLAUDE.md (symlinked at root, gitignored)
 ```
@@ -112,7 +119,7 @@ chrysalis/
 - `scripts/test.sh lint` runs hadolint, actionlint, shellcheck, and a `versions.env` check.
 - `scripts/test.sh image` builds `android-sdk` + `flutter` for the host arch and asserts
   their contents with [container-structure-test](https://github.com/GoogleContainerTools/container-structure-test)
-  (specs in `test/structure/`), plus a version match and the arm64 emulator invariant.
+  (specs in `images/<name>/structure-test.yaml`), plus a version match and the arm64 emulator invariant.
 - `scripts/test.sh multiarch` builds `android-sdk` for amd64 + arm64 (amd64 emulated) and
   asserts the resulting manifest carries both arches. Slow and opt-in, not part of `all`.
 - `scripts/test.sh all` runs lint + image.
