@@ -20,17 +20,11 @@ ENV ANDROID_SDK_ROOT=$ANDROID_HOME \
 ENV ANDROID_SDK_TOOLS_VERSION=13114758
 
 # --- System packages -------------------------------------------------------
-# JDK + build/runtime deps. The X11/emulator libs and ruby/lftp are inherited
-# from upstream (cirruslabs).
+# JDK + build/runtime deps for Android builds.
 RUN apt-get update \
     && apt-get install -y jq \
     && apt-get install -y openjdk-21-jdk \
-    && apt-get install -y sudo wget zip unzip git openssh-client curl bc software-properties-common build-essential ruby-full ruby-bundler libstdc++6 libpulse0 libglu1-mesa locales lcov libsqlite3-dev --no-install-recommends \
-    # for x86 emulators
-    && apt-get install -y libxtst6 libnss3-dev libnspr4 libxss1 libasound2t64 libatk-bridge2.0-0 libgtk-3-0 libgdk-pixbuf2.0-0 \
-    && apt-get install -y -qq xxd \
-    && apt-get install -y lftp \
-    && apt-get install -qq -y sqlite3 libsqlite3-dev \
+    && apt-get install -y sudo wget zip unzip git openssh-client curl build-essential libstdc++6 locales lcov --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # --- Locale ----------------------------------------------------------------
@@ -50,13 +44,9 @@ RUN cd /opt \
 # --- Licenses + platform-tools ---------------------------------------------
 RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers \
     && yes | sdkmanager --licenses \
-    && wget -O /usr/bin/android-wait-for-emulator https://raw.githubusercontent.com/travis-ci/travis-cookbooks/master/community-cookbooks/android-sdk/files/default/android-wait-for-emulator \
-    && chmod +x /usr/bin/android-wait-for-emulator \
     && mkdir -p /root/.android \
     && touch /root/.android/repositories.cfg \
-    && sdkmanager platform-tools \
-    && git config --global user.email "support@cirruslabs.org" \
-    && git config --global user.name "Cirrus CI"
+    && sdkmanager platform-tools
 
 # emulator is not available on linux/arm64 (https://issuetracker.google.com/issues/227219818)
 RUN if [ "$(uname -m)" = "x86_64" ]; then sdkmanager emulator ; fi
