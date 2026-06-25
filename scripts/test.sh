@@ -2,12 +2,14 @@
 #
 # Local test suite for chrysalis (a Docker image build/publish repo).
 #
-#   lint    Static checks, no Docker: hadolint, actionlint, shellcheck, versions.env.
-#   image   Build android-sdk + flutter for the host arch and assert their contents
-#           with container-structure-test, plus a version-match and arch invariant.
-#   all     Everything.
+#   lint       Static checks, no Docker: hadolint, actionlint, shellcheck, versions.env.
+#   image      Build android-sdk + flutter for the host arch and assert their contents
+#              with container-structure-test, plus a version-match and arch invariant.
+#   multiarch  Build android-sdk for amd64 + arm64 (amd64 emulated) and assert the
+#              resulting manifest carries both arches. Slow; opt-in, not part of `all`.
+#   all        lint + image.
 #
-# Usage: scripts/test.sh [lint|image|all]   (default: all)
+# Usage: scripts/test.sh [lint|image|multiarch|all]   (default: all)
 #
 set -euo pipefail
 
@@ -16,15 +18,16 @@ cd "$repo_root"
 
 # Colour, but only on a terminal (keeps CI logs clean).
 if [ -t 1 ]; then
-  bold=$'\033[1m'; red=$'\033[31m'; grn=$'\033[32m'; rst=$'\033[0m'
+  bold=$'\033[1m'; red=$'\033[31m'; grn=$'\033[32m'; ylw=$'\033[33m'; rst=$'\033[0m'
 else
-  bold=''; red=''; grn=''; rst=''
+  bold=''; red=''; grn=''; ylw=''; rst=''
 fi
 
 failures=0
 section() { printf '\n%s==> %s%s\n' "$bold" "$1" "$rst"; }
 ok()      { printf '%s ok %s  %s\n' "$grn" "$rst" "$1"; }
 bad()     { printf '%sFAIL%s  %s\n' "$red" "$rst" "$1"; failures=$((failures + 1)); }
+skip()    { printf '%sSKIP%s  %s\n' "$ylw" "$rst" "$1"; }
 
 need() {
   command -v "$1" >/dev/null 2>&1 && return 0
@@ -143,13 +146,75 @@ run_image() {
   fi
 }
 
+# Builds android-sdk for both arches into an OCI archive (no registry needed) and
+# asserts the manifest carries linux/amd64 + linux/arm64. amd64 is emulated on an
+# arm64 host, so this is slow and kept out of `all`. flutter's amd64 build is left to
+# CI (emulating it locally is impractical). The imagetools merge the workflow uses is
+# already proven by the real CI publish; here we just prove both arches build + assemble.
+run_multiarch() {
+  if ! command -v docker >/dev/null 2>&1; then
+    printf '%smissing tool:%s docker  (start OrbStack / Docker Desktop)\n' "$red" "$rst"; exit 2
+  fi
+  need jq 'brew install jq'
+
+  local builder='chrysalis-test-builder' tmpd oci log arches d idx_mt
+  tmpd="$(mktemp -d)"
+  oci="$tmpd/android-sdk.oci.tar"
+  log="$tmpd/build.log"
+
+  section 'buildx builder (docker-container)'
+  if docker buildx inspect "$builder" >/dev/null 2>&1; then
+    ok "reusing $builder"
+  elif docker buildx create --name "$builder" --driver docker-container --bootstrap >/dev/null 2>&1; then
+    ok "created $builder"
+  else
+    bad 'could not create a docker-container builder'; rm -rf "$tmpd"; return
+  fi
+
+  section 'amd64 emulation check'
+  printf 'FROM alpine:3\nRUN echo ok\n' > "$tmpd/probe.Dockerfile"
+  if docker buildx build --builder "$builder" --platform linux/amd64 \
+       -f "$tmpd/probe.Dockerfile" --output type=cacheonly "$tmpd" >"$log" 2>&1; then
+    ok 'amd64 builds run here'
+  else
+    skip 'amd64 emulation unavailable; enable it with:'
+    printf '        docker run --privileged --rm tonistiigi/binfmt --install amd64\n'
+    rm -rf "$tmpd"; return
+  fi
+
+  section 'build android-sdk for amd64 + arm64 (amd64 emulated, slow)'
+  if docker buildx build --builder "$builder" --platform linux/amd64,linux/arm64 --provenance=false \
+       -f sdk/Dockerfile.android --output "type=oci,dest=$oci" . >"$log" 2>&1; then
+    ok 'built both arches'
+  else
+    bad 'android-sdk multi-arch build'; tail -n 30 "$log"; rm -rf "$tmpd"; return
+  fi
+
+  section 'manifest carries both arches'
+  idx_mt="$(tar -xOf "$oci" index.json | jq -r '.manifests[0].mediaType')"
+  if printf '%s' "$idx_mt" | grep -q 'image.index'; then
+    d="$(tar -xOf "$oci" index.json | jq -r '.manifests[0].digest' | sed 's/sha256://')"
+    arches="$(tar -xOf "$oci" "blobs/sha256/$d" | jq -r '.manifests[].platform | "\(.os)/\(.architecture)"')"
+  else
+    arches="$(tar -xOf "$oci" index.json | jq -r '.manifests[].platform | "\(.os)/\(.architecture)"')"
+  fi
+  if printf '%s\n' "$arches" | grep -qx 'linux/amd64' && printf '%s\n' "$arches" | grep -qx 'linux/arm64'; then
+    ok "manifest arches: $(printf '%s' "$arches" | tr '\n' ' ')"
+  else
+    bad "manifest missing an arch (got: $(printf '%s' "$arches" | tr '\n' ' '))"
+  fi
+
+  rm -rf "$tmpd"
+}
+
 main() {
   local cmd="${1:-all}"
   case "$cmd" in
-    lint)  run_lint ;;
-    image) run_image ;;
-    all)   run_lint; run_image ;;
-    *) printf 'usage: %s [lint|image|all]\n' "$0"; exit 2 ;;
+    lint)      run_lint ;;
+    image)     run_image ;;
+    multiarch) run_multiarch ;;
+    all)       run_lint; run_image ;;
+    *) printf 'usage: %s [lint|image|multiarch|all]\n' "$0"; exit 2 ;;
   esac
 
   echo

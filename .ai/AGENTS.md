@@ -105,6 +105,22 @@ chrysalis/
 3. Every 2h, `check_flutter_versions.yml` runs `update_flutter_versions.sh`; if Flutter
    moved, it opens a version-bump PR. Merging triggers a republish.
 
+## Testing
+
+`scripts/test.sh` runs the suite locally, no CI round-trip needed:
+
+- `scripts/test.sh lint` runs hadolint, actionlint, shellcheck, and a `versions.env` check.
+- `scripts/test.sh image` builds `android-sdk` + `flutter` for the host arch and asserts
+  their contents with [container-structure-test](https://github.com/GoogleContainerTools/container-structure-test)
+  (specs in `test/structure/`), plus a version match and the arm64 emulator invariant.
+- `scripts/test.sh multiarch` builds `android-sdk` for amd64 + arm64 (amd64 emulated) and
+  asserts the resulting manifest carries both arches. Slow and opt-in, not part of `all`.
+- `scripts/test.sh all` runs lint + image.
+
+Run it before touching the Dockerfiles or the workflow. Tools install via `brew`
+(hadolint, actionlint, shellcheck, container-structure-test); on this OrbStack host the
+script points container-structure-test at the right Docker socket automatically.
+
 ## Code style (no separate CODESTYLE.md yet)
 
 The code surface is small; until a `CODESTYLE.md` is warranted, follow:
