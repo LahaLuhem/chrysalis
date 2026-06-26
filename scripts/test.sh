@@ -2,8 +2,8 @@
 #
 # Local test suite for chrysalis (a Docker image build/publish repo).
 #
-#   lint       Static checks: hadolint, actionlint, shellcheck, versions.env. Each runs
-#              from PATH if present, else from the linterpol image (override LINTERPOL_IMAGE).
+#   lint       Static checks: hadolint, actionlint, shellcheck, versions.env. The linters
+#              run from the linterpol image, pulled on demand (override LINTERPOL_IMAGE).
 #   image      Build android-sdk + flutter for the host arch and assert their contents
 #              with container-structure-test, plus a version-match and arch invariant.
 #   multiarch  Build android-sdk for amd64 + arm64 (amd64 emulated) and assert the
@@ -36,36 +36,42 @@ need() {
   exit 2
 }
 
-# The lint tools (hadolint, actionlint, shellcheck) run from PATH when installed, else
-# from the linterpol image, so they don't have to be installed on the host. The repo is
-# mounted read-only at /work, so the repo-relative paths callers pass resolve the same
-# either way. Override the image with LINTERPOL_IMAGE (e.g. a published ref).
-LINTERPOL_IMAGE="${LINTERPOL_IMAGE:-linterpol:local}"
+# The lint tools (hadolint, actionlint, shellcheck) run from the linterpol image, so they
+# don't have to be installed on the host and every run (local or CI) uses the same pinned
+# versions. The repo is mounted read-only at /work, so the repo-relative paths callers pass
+# resolve there. Override the image with LINTERPOL_IMAGE (e.g. a locally-built linterpol:local
+# when developing Linterpol itself). Pinned by digest; Renovate bumps it (.github/renovate.json).
+# renovate: datasource=docker depName=ghcr.io/lahaluhem/linterpol
+LINTERPOL_IMAGE="${LINTERPOL_IMAGE:-ghcr.io/lahaluhem/linterpol:latest@sha256:172e3d10af7fc726fa57bea5f609fdf2fab34ad1c761c9f63f1eac89e6e9ce11}"
 linterpol_ready=''
 
+# Make sure LINTERPOL_IMAGE is present locally, pulling it on demand (the default is a
+# public ghcr ref). A local-only tag that hasn't been built will fail the pull, with a hint.
 ensure_linterpol_image() {
   [ -n "$linterpol_ready" ] && return 0
   if docker image inspect "$LINTERPOL_IMAGE" >/dev/null 2>&1; then
     linterpol_ready=1
     return 0
   fi
-  printf '%smissing image:%s %s is not built locally.\n' "$red" "$rst" "$LINTERPOL_IMAGE"
-  printf '       build it from the linterpol repo (./scripts/build.sh), or set LINTERPOL_IMAGE to a published ref.\n'
+  printf 'pulling %s\n' "$LINTERPOL_IMAGE"
+  if docker pull "$LINTERPOL_IMAGE" >/dev/null 2>&1; then
+    linterpol_ready=1
+    return 0
+  fi
+  printf '%scould not pull%s %s\n' "$red" "$rst" "$LINTERPOL_IMAGE"
+  printf '       check the ref, or set LINTERPOL_IMAGE to a tag you have built (linterpol repo: ./scripts/build.sh)\n'
   exit 2
 }
 
-# lint_tool <tool> <args...>: run a linter locally if present, else via the linterpol image.
+# lint_tool <tool> <args...>: run a linter from the linterpol image (the host isn't assumed
+# to have the tools; the image is the single source of versions).
 lint_tool() {
-  local tool="$1"; shift
-  if command -v "$tool" >/dev/null 2>&1; then
-    "$tool" "$@"
-  elif command -v docker >/dev/null 2>&1; then
-    ensure_linterpol_image
-    docker run --rm -v "$repo_root:/work:ro" -w /work "$LINTERPOL_IMAGE" "$tool" "$@"
-  else
-    printf '%smissing tool:%s %s is not on PATH and docker is unavailable for the fallback\n' "$red" "$rst" "$tool"
+  if ! command -v docker >/dev/null 2>&1; then
+    printf '%smissing tool:%s docker is required to run the linters from the linterpol image\n' "$red" "$rst"
     exit 2
   fi
+  ensure_linterpol_image
+  docker run --rm -v "$repo_root:/work:ro" -w /work "$LINTERPOL_IMAGE" "$@"
 }
 
 flutter_version() { grep -E '^FLUTTER_VERSION=' versions.env | cut -d= -f2- || true; }
