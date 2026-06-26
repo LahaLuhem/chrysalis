@@ -14,6 +14,16 @@ and `linux/arm64`. They follow the latest stable Flutter and live on GHCR.
 
 They're plain OCI images, so they run anywhere: any CI, any container runtime.
 
+<!-- TOC start (generated with https://github.com/derlin/bitdowntoc) -->
+
+- [Images](#images)
+- [Quick start](#quick-start)
+- [What's in the image](#whats-in-the-image)
+- [Architecture support](#architecture-support)
+- [Staying current](#staying-current)
+
+<!-- TOC end -->
+
 ## Images
 
 | Image | Tags |
@@ -106,9 +116,10 @@ few tools run emulated while everything else stays native. The full story is in
 
 ## Staying current
 
-A scheduled job checks for new stable Flutter releases every couple of hours and
-opens a PR bumping [`versions.env`](versions.env). Merge it, and the images
-rebuild on the new version.
+[Renovate](https://docs.renovatebot.com) checks weekly for new stable Flutter releases
+and opens a PR bumping [`versions.env`](versions.env). Merge it, and the images rebuild on
+the new version. The same config keeps the GitHub Actions pins and the `ubuntu` base image
+current.
 
 <details>
 <summary>Where this repo comes from</summary>
