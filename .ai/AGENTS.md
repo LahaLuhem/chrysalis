@@ -127,11 +127,12 @@ chrysalis/
 - `scripts/test.sh all` runs lint + image.
 
 Run it before touching the Dockerfiles or the workflow. The lint tools (hadolint,
-actionlint, shellcheck) run from `PATH` when installed, otherwise from the `Linterpol`
-image (its own repo; defaults to the local tag `linterpol:local`, override via
-`LINTERPOL_IMAGE`), so a host without them still lints. `container-structure-test` still
-installs via `brew`; on this OrbStack host the script points it at the right Docker
-socket automatically.
+actionlint, shellcheck) run from the [`Linterpol`](https://github.com/LahaLuhem/linterpol)
+image (`ghcr.io/lahaluhem/linterpol`, its own repo), which `test.sh` pulls on demand, so the
+tools need not be installed on the host and every run uses the same pinned versions. The
+default is digest-pinned and bumped by Renovate; override it with `LINTERPOL_IMAGE` (e.g. a
+local `linterpol:local` build). `container-structure-test` still installs via `brew`; on this
+OrbStack host the script points it at the right Docker socket automatically.
 
 ## Code style (no separate CODESTYLE.md yet)
 
