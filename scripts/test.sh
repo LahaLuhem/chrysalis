@@ -2,7 +2,8 @@
 #
 # Local test suite for chrysalis (a Docker image build/publish repo).
 #
-#   lint       Static checks, no Docker: hadolint, actionlint, shellcheck, versions.env.
+#   lint       Static checks: hadolint, actionlint, shellcheck, versions.env. Each runs
+#              from PATH if present, else from the linterpol image (override LINTERPOL_IMAGE).
 #   image      Build android-sdk + flutter for the host arch and assert their contents
 #              with container-structure-test, plus a version-match and arch invariant.
 #   multiarch  Build android-sdk for amd64 + arm64 (amd64 emulated) and assert the
@@ -35,6 +36,38 @@ need() {
   exit 2
 }
 
+# The lint tools (hadolint, actionlint, shellcheck) run from PATH when installed, else
+# from the linterpol image, so they don't have to be installed on the host. The repo is
+# mounted read-only at /work, so the repo-relative paths callers pass resolve the same
+# either way. Override the image with LINTERPOL_IMAGE (e.g. a published ref).
+LINTERPOL_IMAGE="${LINTERPOL_IMAGE:-linterpol:local}"
+linterpol_ready=''
+
+ensure_linterpol_image() {
+  [ -n "$linterpol_ready" ] && return 0
+  if docker image inspect "$LINTERPOL_IMAGE" >/dev/null 2>&1; then
+    linterpol_ready=1
+    return 0
+  fi
+  printf '%smissing image:%s %s is not built locally.\n' "$red" "$rst" "$LINTERPOL_IMAGE"
+  printf '       build it from the linterpol repo (./scripts/build.sh), or set LINTERPOL_IMAGE to a published ref.\n'
+  exit 2
+}
+
+# lint_tool <tool> <args...>: run a linter locally if present, else via the linterpol image.
+lint_tool() {
+  local tool="$1"; shift
+  if command -v "$tool" >/dev/null 2>&1; then
+    "$tool" "$@"
+  elif command -v docker >/dev/null 2>&1; then
+    ensure_linterpol_image
+    docker run --rm -v "$repo_root:/work:ro" -w /work "$LINTERPOL_IMAGE" "$tool" "$@"
+  else
+    printf '%smissing tool:%s %s is not on PATH and docker is unavailable for the fallback\n' "$red" "$rst" "$tool"
+    exit 2
+  fi
+}
+
 flutter_version() { grep -E '^FLUTTER_VERSION=' versions.env | cut -d= -f2- || true; }
 
 check_versions_env() {
@@ -51,18 +84,14 @@ check_versions_env() {
 }
 
 run_lint() {
-  need hadolint   'brew install hadolint'
-  need actionlint 'brew install actionlint'
-  need shellcheck 'brew install shellcheck'
-
   section 'hadolint (Dockerfiles)'
-  if hadolint images/android-sdk/Dockerfile images/flutter/Dockerfile; then ok 'Dockerfiles clean'; else bad 'hadolint'; fi
+  if lint_tool hadolint images/android-sdk/Dockerfile images/flutter/Dockerfile; then ok 'Dockerfiles clean'; else bad 'hadolint'; fi
 
   section 'actionlint (workflows)'
-  if actionlint .github/workflows/*.yml; then ok 'workflows clean'; else bad 'actionlint'; fi
+  if lint_tool actionlint .github/workflows/*.yml; then ok 'workflows clean'; else bad 'actionlint'; fi
 
   section 'shellcheck (shell scripts)'
-  if shellcheck scripts/*.sh; then ok 'scripts clean'; else bad 'shellcheck'; fi
+  if lint_tool shellcheck scripts/*.sh; then ok 'scripts clean'; else bad 'shellcheck'; fi
 
   section 'versions.env sanity'
   check_versions_env
