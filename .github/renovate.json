@@ -1,6 +1,7 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:best-practices", "schedule:weekly"],
+  "enabledManagers": ["custom.regex", "github-actions", "dockerfile"],
   "packageRules": [
     {
       "description": "android-sdk:latest is rebuilt and republished every run (flutter FROMs it); it must float, so never digest-pin it.",
