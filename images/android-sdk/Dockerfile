@@ -7,7 +7,7 @@
 #   Build toolchain  JDK + the Android SDK (everything below)
 #   Convenience (DX) jq, lcov
 # The flutter image adds the Flutter layer on top.
-FROM ubuntu:24.04
+FROM ubuntu:26.04@sha256:53958ec7b67c2c9355df922dd08dbf0360611f8c3cdb656875e81873db9ffdba
 
 LABEL org.opencontainers.image.source=https://github.com/LahaLuhem/chrysalis \
       org.opencontainers.image.description="Android SDK (cmdline-tools, platform-tools, build-tools 36.0.0, platform android-36) on Ubuntu 24.04"
