@@ -126,9 +126,12 @@ chrysalis/
   asserts the resulting manifest carries both arches. Slow and opt-in, not part of `all`.
 - `scripts/test.sh all` runs lint + image.
 
-Run it before touching the Dockerfiles or the workflow. Tools install via `brew`
-(hadolint, actionlint, shellcheck, container-structure-test); on this OrbStack host the
-script points container-structure-test at the right Docker socket automatically.
+Run it before touching the Dockerfiles or the workflow. The lint tools (hadolint,
+actionlint, shellcheck) run from `PATH` when installed, otherwise from the `Linterpol`
+image (its own repo; defaults to the local tag `linterpol:local`, override via
+`LINTERPOL_IMAGE`), so a host without them still lints. `container-structure-test` still
+installs via `brew`; on this OrbStack host the script points it at the right Docker
+socket automatically.
 
 ## Code style (no separate CODESTYLE.md yet)
 
