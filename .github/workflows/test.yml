@@ -42,6 +42,8 @@ jobs:
 
   # Static checks only. Building the images and running the structure tests happens
   # in build_and_push.yml (build once, test in place), so it is not duplicated here.
+  # The linters run from the pinned linterpol image (scripts/test.sh pulls it on demand);
+  # there's no install step, and Docker is preinstalled on the runner.
   lint:
     needs: gate
     if: needs.gate.outputs.run == 'true'
@@ -49,29 +51,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-
-      - name: Install hadolint + actionlint
-        env:
-          # renovate: datasource=github-releases depName=hadolint/hadolint
-          HADOLINT_VERSION: v2.14.0
-          # renovate: datasource=github-releases depName=rhysd/actionlint
-          ACTIONLINT_VERSION: v1.7.12
-        run: |
-          # Pinned + checksum-verified (Renovate bumps the versions above). shellcheck
-          # ships with the runner; only hadolint + actionlint are installed here.
-          hadolint_base="https://github.com/hadolint/hadolint/releases/download/${HADOLINT_VERSION}"
-          curl -fsSL --retry 3 --retry-delay 2 -o /tmp/hadolint "${hadolint_base}/hadolint-linux-x86_64"
-          curl -fsSL --retry 3 --retry-delay 2 -o /tmp/hadolint.sha256 "${hadolint_base}/hadolint-linux-x86_64.sha256"
-          echo "$(awk '{print $1}' /tmp/hadolint.sha256)  /tmp/hadolint" | sha256sum -c -
-          sudo install -m 0755 /tmp/hadolint /usr/local/bin/hadolint
-
-          actionlint_base="https://github.com/rhysd/actionlint/releases/download/${ACTIONLINT_VERSION}"
-          actionlint_tar="actionlint_${ACTIONLINT_VERSION#v}_linux_amd64.tar.gz"
-          curl -fsSL --retry 3 --retry-delay 2 -o /tmp/actionlint.tar.gz "${actionlint_base}/${actionlint_tar}"
-          curl -fsSL --retry 3 --retry-delay 2 -o /tmp/actionlint.checksums "${actionlint_base}/actionlint_${ACTIONLINT_VERSION#v}_checksums.txt"
-          echo "$(grep -F "${actionlint_tar}" /tmp/actionlint.checksums | awk '{print $1}')  /tmp/actionlint.tar.gz" | sha256sum -c -
-          tar -xzf /tmp/actionlint.tar.gz -C /tmp actionlint
-          sudo install -m 0755 /tmp/actionlint /usr/local/bin/actionlint
 
       - name: Lint
         run: ./scripts/test.sh lint

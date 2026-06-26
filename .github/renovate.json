@@ -19,11 +19,11 @@
       ]
     },
     {
-      "description": "Track CI lint tools (hadolint, actionlint) pinned as env vars in workflow files.",
+      "description": "Track the linterpol lint image (pinned by digest) in scripts/test.sh.",
       "customType": "regex",
-      "managerFilePatterns": ["/^\\.github/workflows/.+\\.ya?ml$/"],
+      "managerFilePatterns": ["/^scripts/test\\.sh$/"],
       "matchStrings": [
-        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+\\w+:\\s*(?<currentValue>\\S+)"
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+LINTERPOL_IMAGE=\"\\$\\{LINTERPOL_IMAGE:-[^:\"]+:(?<currentValue>[^@\"]+)@(?<currentDigest>sha256:[0-9a-f]+)\\}\""
       ]
     }
   ]
