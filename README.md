@@ -14,6 +14,16 @@ and `linux/arm64`. They follow the latest stable Flutter and live on GHCR.
 
 They're plain OCI images, so they run anywhere: any CI, any container runtime.
 
+<!-- TOC start (generated with https://github.com/derlin/bitdowntoc) -->
+
+- [Images](#images)
+- [Quick start](#quick-start)
+- [What's in the image](#whats-in-the-image)
+- [Architecture support](#architecture-support)
+- [Staying current](#staying-current)
+
+<!-- TOC end -->
+
 ## Images
 
 | Image | Tags |

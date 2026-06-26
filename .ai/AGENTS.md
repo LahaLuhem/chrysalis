@@ -41,7 +41,10 @@ Why it exists: [`APPENDIX.md#why-multi-arch`](../APPENDIX.md#why-multi-arch).
   `ubuntu-24.04-arm` (arm64; free for public repos). GitHub macOS runners are arm64
   **macOS** and cannot build Linux arm64 images — never use them for that.
 - **GHCR** — `ghcr.io/lahaluhem` (lowercase; GHCR namespaces are lowercase).
-- **Bash** — `scripts/update_flutter_versions.sh` (version tracking).
+- **Renovate** — version tracking. `config:best-practices` (Mend-hosted) bumps the Flutter SDK
+  pin (custom manager + `flutter-version` datasource), the GitHub Actions pins, and the `ubuntu`
+  base; opens PRs weekly. Config: `.github/renovate.json`.
+- **Bash** — `scripts/test.sh` (local test suite).
 - Pinned inputs live in **`versions.env`** (`DOCKER_TAG`, `FLUTTER_VERSION`).
 
 ## Repo layout
@@ -59,11 +62,10 @@ chrysalis/
 │       ├── structure-test.yaml
 │       └── .dockerignore
 ├── scripts/
-│   ├── update_flutter_versions.sh   Fetches latest stable Flutter, rewrites versions.env
 │   └── test.sh                      Local test suite (lint / image / multiarch / all)
-├── .github/workflows/
-│   ├── build_and_push.yml           Multi-arch build + publish (matrix → digest → merge)
-│   └── check_flutter_versions.yml   Every 2h: run the script, open a version-bump PR
+├── .github/
+│   ├── workflows/                   build_and_push.yml (build+publish), build-image.yml (reusable), test.yml (lint)
+│   └── renovate.json                Renovate: version tracking (Flutter pin, Actions, ubuntu base)
 ├── .hadolint.yaml                   hadolint rules (deliberate ignores)
 ├── README.md                        Image names, what's inside, usage
 ├── APPENDIX.md                      Design rationale (anchor-keyed)
@@ -96,10 +98,9 @@ chrysalis/
    `~/.claude/rules/dependency-versions.md`.
 8. **Never report a multi-arch publish as successful without `docker manifest inspect
    <ref>` showing BOTH `linux/amd64` and `linux/arm64`.**
-9. **Keep version tracking arch-independent.** `check_flutter_versions.yml` +
-   `update_flutter_versions.sh` fetch the latest stable Flutter and open a
-   `chore/update-flutter-version` PR every 2h; merging republishes. Don't couple it to a
-   platform.
+9. **Keep version tracking arch-independent.** Renovate (`.github/renovate.json`) watches the
+   stable Flutter channel and opens a weekly version-bump PR; merging republishes. Version
+   tracking stays platform-agnostic by design; never couple it to an arch.
 
 ## Build & publish flow
 
@@ -109,8 +110,8 @@ chrysalis/
      `android-sdk:latest`;
    - builds `flutter` for each arch `FROM` that manifest list, pushes by digest, merges into
      `flutter:<version>` + `flutter:stable`.
-3. Every 2h, `check_flutter_versions.yml` runs `update_flutter_versions.sh`; if Flutter
-   moved, it opens a version-bump PR. Merging triggers a republish.
+3. Weekly, Renovate (`.github/renovate.json`) checks the stable Flutter channel; if it moved, it
+   opens a PR bumping `versions.env`. Merging triggers a republish.
 
 ## Testing
 
