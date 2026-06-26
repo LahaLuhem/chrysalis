@@ -1,0 +1,21 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:best-practices", "schedule:weekly"],
+  "packageRules": [
+    {
+      "description": "android-sdk:latest is rebuilt and republished every run (flutter FROMs it); it must float, so never digest-pin it.",
+      "matchPackageNames": ["ghcr.io/lahaluhem/android-sdk"],
+      "pinDigests": false
+    }
+  ],
+  "customManagers": [
+    {
+      "description": "Track the Flutter SDK pin in versions.env against the stable channel (flutter-version datasource).",
+      "customType": "regex",
+      "managerFilePatterns": ["/^versions\\.env$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+FLUTTER_VERSION=(?<currentValue>\\S+)"
+      ]
+    }
+  ]
+}
