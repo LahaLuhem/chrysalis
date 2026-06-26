@@ -1,9 +1,9 @@
 name: Build and publish one image (reusable)
 
-# Builds one image for linux/amd64 + linux/arm64 by digest, then merges the
-# per-arch digests into a single manifest list. Called once per image by
-# build_and_push.yml. On non-publish runs (push: false) it builds both arches
-# for validation without pushing, and the merge is skipped.
+# Builds one image for linux/amd64 + linux/arm64, structure-tests each arch on its
+# native runner, then (on publish runs) pushes by digest and merges into a single
+# manifest list. Called once per image by build_and_push.yml. On non-publish runs
+# (push: false) it builds + structure-tests both arches for validation, no push.
 on:
   workflow_call:
     inputs:
@@ -57,6 +57,17 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
+      - name: Install container-structure-test
+        run: |
+          case "$(uname -m)" in
+            x86_64) arch=amd64 ;;
+            aarch64) arch=arm64 ;;
+            *) echo "unsupported arch: $(uname -m)"; exit 1 ;;
+          esac
+          sudo curl -fsSL -o /usr/local/bin/container-structure-test \
+            "https://storage.googleapis.com/container-structure-test/latest/container-structure-test-linux-$arch"
+          sudo chmod +x /usr/local/bin/container-structure-test
+
       - name: Login to GHCR
         if: inputs.push
         uses: docker/login-action@v4
@@ -65,19 +76,37 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build (push by digest on publish runs)
-        id: build
+      # Build the image once (native, loaded into Docker) so we can test it. The
+      # push-by-digest build below reuses these layers from cache.
+      - name: Build for test (load)
         uses: docker/build-push-action@v7
         with:
           context: ${{ inputs.context }}
           platforms: ${{ matrix.platform }}
-          # Disable provenance/SBOM attestations: they add `unknown/unknown`
-          # entries to the manifest list that muddy `docker manifest inspect`.
           provenance: false
           build-args: ${{ inputs.build-args }}
-          outputs: ${{ inputs.push && format('type=image,name={0}/{1},push-by-digest=true,name-canonical=true,push=true', env.REGISTRY, inputs.name) || 'type=image,push=false' }}
+          load: true
+          tags: ${{ inputs.name }}:test
           cache-from: type=gha,scope=${{ inputs.name }}-${{ env.PLATFORM_PAIR }}
           cache-to: type=gha,scope=${{ inputs.name }}-${{ env.PLATFORM_PAIR }},mode=max
+
+      - name: Structure test
+        env:
+          IMG: ${{ inputs.name }}
+        run: container-structure-test test --image "$IMG:test" --config "images/$IMG/structure-test.yaml"
+
+      # Push by digest, reusing the cached layers from the test build above.
+      - name: Build and push by digest
+        id: build
+        if: inputs.push
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ inputs.context }}
+          platforms: ${{ matrix.platform }}
+          provenance: false
+          build-args: ${{ inputs.build-args }}
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ inputs.name }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ inputs.name }}-${{ env.PLATFORM_PAIR }}
 
       - name: Export digest
         if: inputs.push
