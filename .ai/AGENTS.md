@@ -42,8 +42,9 @@ Why it exists: [`APPENDIX.md#why-multi-arch`](../APPENDIX.md#why-multi-arch).
   **macOS** and cannot build Linux arm64 images — never use them for that.
 - **GHCR** — `ghcr.io/lahaluhem` (lowercase; GHCR namespaces are lowercase).
 - **Renovate** — version tracking. `config:best-practices` (Mend-hosted) bumps the Flutter SDK
-  pin (custom manager + `flutter-version` datasource), the GitHub Actions pins, and the `ubuntu`
-  base; opens PRs weekly. Config: `.github/renovate.json`.
+  pin (custom manager + `flutter-version` datasource), the GitHub Actions pins, the `ubuntu`
+  base, and the CI lint tools hadolint + actionlint (custom manager + `github-releases`); opens
+  PRs weekly. Config: `.github/renovate.json`.
 - **Bash** — `scripts/test.sh` (local test suite).
 - Pinned inputs live in **`versions.env`** (`DOCKER_TAG`, `FLUTTER_VERSION`).
 
