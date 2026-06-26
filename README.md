@@ -1,5 +1,14 @@
 # [Flutter](https://flutter.dev/) + Android SDK Docker images
 
+[![Build images](https://github.com/LahaLuhem/chrysalis/actions/workflows/build_and_push.yml/badge.svg?branch=master)](https://github.com/LahaLuhem/chrysalis/actions/workflows/build_and_push.yml)
+[![Test](https://github.com/LahaLuhem/chrysalis/actions/workflows/test.yml/badge.svg?branch=master)](https://github.com/LahaLuhem/chrysalis/actions/workflows/test.yml)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/LahaLuhem/chrysalis/pulls)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+[![GitHub issues](https://img.shields.io/github/issues/LahaLuhem/chrysalis.svg)](https://github.com/LahaLuhem/chrysalis/issues)
+[![GitHub closed issues](https://img.shields.io/github/issues-closed/LahaLuhem/chrysalis.svg)](https://github.com/LahaLuhem/chrysalis/issues?q=is%3Aissue+is%3Aclosed)
+[![GitHub pull requests](https://img.shields.io/github/issues-pr/LahaLuhem/chrysalis.svg)](https://github.com/LahaLuhem/chrysalis/pulls)
+[![GitHub closed pull requests](https://img.shields.io/github/issues-pr-closed/LahaLuhem/chrysalis.svg)](https://github.com/LahaLuhem/chrysalis/pulls?q=is%3Apr+is%3Aclosed)
+
 Docker images with Flutter and the Android SDK baked in, for both `linux/amd64`
 and `linux/arm64`. They follow the latest stable Flutter and live on GHCR.
 
