@@ -1,0 +1,64 @@
+name: Test
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Decide whether to lint. Always on pull requests. On a push to master, skip if
+  # the pushed commit came from a merged PR (already linted on the PR), but run for
+  # a direct push. Uses the commit/PR association, so it is independent of the merge
+  # strategy (merge commit, squash, or rebase).
+  gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+    steps:
+      - name: Decide
+        id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != 'push' ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          count="$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" --jq 'length')"
+          if [ "$count" -gt 0 ]; then
+            echo "$GITHUB_SHA came from a PR; skipping (already linted on the PR)."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # Static checks only. Building the images and running the structure tests happens
+  # in build_and_push.yml (build once, test in place), so it is not duplicated here.
+  lint:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install hadolint + actionlint
+        run: |
+          sudo curl -fsSL -o /usr/local/bin/hadolint \
+            https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64
+          sudo chmod +x /usr/local/bin/hadolint
+          curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash -o /tmp/dl-actionlint.bash
+          bash /tmp/dl-actionlint.bash
+          sudo mv ./actionlint /usr/local/bin/
+          # hadolint + actionlint installed above; shellcheck ships with the runner.
+
+      - name: Lint
+        run: ./scripts/test.sh lint
