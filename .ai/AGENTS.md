@@ -44,7 +44,7 @@ Why it exists: [`APPENDIX.md#why-multi-arch`](../APPENDIX.md#why-multi-arch).
 - **Renovate** — version tracking. `config:best-practices` (Mend-hosted) bumps the Flutter SDK
   pin (custom manager + `flutter-version` datasource), the GitHub Actions pins, the `ubuntu`
   base, and the CI lint tools hadolint + actionlint (custom manager + `github-releases`); opens
-  PRs weekly. Config: `.github/renovate.json`.
+  PRs weekly. Config: `.github/renovate.jsonc`.
 - **Bash** — `scripts/test.sh` (local test suite).
 - Pinned inputs live in **`versions.env`** (`DOCKER_TAG`, `FLUTTER_VERSION`).
 
@@ -66,7 +66,7 @@ chrysalis/
 │   └── test.sh                      Local test suite (lint / image / multiarch / all)
 ├── .github/
 │   ├── workflows/                   build_and_push.yml (build+publish), build-image.yml (reusable), test.yml (lint)
-│   └── renovate.json                Renovate: version tracking (Flutter pin, Actions, ubuntu base)
+│   └── renovate.jsonc               Renovate: version tracking (Flutter pin, Actions, ubuntu base)
 ├── .hadolint.yaml                   hadolint rules (deliberate ignores)
 ├── README.md                        Image names, what's inside, usage
 ├── APPENDIX.md                      Design rationale (anchor-keyed)
@@ -99,7 +99,7 @@ chrysalis/
    `~/.claude/rules/dependency-versions.md`.
 8. **Never report a multi-arch publish as successful without `docker manifest inspect
    <ref>` showing BOTH `linux/amd64` and `linux/arm64`.**
-9. **Keep version tracking arch-independent.** Renovate (`.github/renovate.json`) watches the
+9. **Keep version tracking arch-independent.** Renovate (`.github/renovate.jsonc`) watches the
    stable Flutter channel and opens a weekly version-bump PR; merging republishes. Version
    tracking stays platform-agnostic by design; never couple it to an arch.
 
@@ -111,7 +111,7 @@ chrysalis/
      `android-sdk:latest`;
    - builds `flutter` for each arch `FROM` that manifest list, pushes by digest, merges into
      `flutter:<version>` + `flutter:stable`.
-3. Weekly, Renovate (`.github/renovate.json`) checks the stable Flutter channel; if it moved, it
+3. Weekly, Renovate (`.github/renovate.jsonc`) checks the stable Flutter channel; if it moved, it
    opens a PR bumping `versions.env`. Merging triggers a republish.
 
 ## Testing
