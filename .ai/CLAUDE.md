@@ -86,7 +86,7 @@ you did NOT.
   the publish workflow on a branch via `workflow_dispatch` — is **confirm-first**
   (outward-facing).
 - **Any git mutation** — see *VCS* above.
-- **Hand-editing `versions.env`'s `FLUTTER_VERSION`** — that's the version-tracker's job;
-  bump only when the user asks.
+- **Hand-editing `versions.env`'s `FLUTTER_VERSION`** — that's Renovate's job
+  (`.github/renovate.json`); bump only when the user asks.
 - **Destructive Docker on shared state** (`docker system prune`, removing the user's
   images/volumes) — ask first.
