@@ -1,7 +1,17 @@
+// Renovate config for chrysalis.
+// This is .jsonc (JSON-with-comments), not .json5: Renovate recommends .jsonc for
+// commented configs, and editors validate it against the schema below natively.
+// Options reference: https://docs.renovatebot.com/configuration-options/
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+
+  // config:best-practices digest-pins Docker images and SHA-pins Actions; weekly PRs.
   "extends": ["config:best-practices", "schedule:weekly"],
+
+  // Managers in play: custom.regex (the markered pins below), github-actions (workflow
+  // action SHAs), dockerfile (FROM lines in images/*/Dockerfile).
   "enabledManagers": ["custom.regex", "github-actions", "dockerfile"],
+
   "packageRules": [
     {
       "description": "android-sdk:latest is rebuilt and republished every run (flutter FROMs it); it must float, so never digest-pin it.",
@@ -9,11 +19,14 @@
       "pinDigests": false
     }
   ],
+
   "customManagers": [
     {
       "description": "Track the Flutter SDK pin in versions.env against the stable channel (flutter-version datasource).",
       "customType": "regex",
       "managerFilePatterns": ["/^versions\\.env$/"],
+      // Marker line `# renovate: datasource=… depName=…` then `FLUTTER_VERSION=<x.y.z>`;
+      // datasource + depName come from the marker, currentValue is the version.
       "matchStrings": [
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+FLUTTER_VERSION=(?<currentValue>\\S+)"
       ]
@@ -22,6 +35,11 @@
       "description": "Track the linterpol lint image (pinned by digest) in scripts/test.sh.",
       "customType": "regex",
       "managerFilePatterns": ["/^scripts/test\\.sh$/"],
+      // Reads the marker line then the LINTERPOL_IMAGE default, capturing:
+      //   datasource    = docker  (from the marker)
+      //   depName       = ghcr.io/lahaluhem/linterpol
+      //   currentValue  = the tag (latest)   -> [^@"]+ up to the '@'
+      //   currentDigest = sha256:<hex>       -> so Renovate bumps the digest in place
       "matchStrings": [
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+LINTERPOL_IMAGE=\"\\$\\{LINTERPOL_IMAGE:-[^:\"]+:(?<currentValue>[^@\"]+)@(?<currentDigest>sha256:[0-9a-f]+)\\}\""
       ]
