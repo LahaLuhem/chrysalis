@@ -87,6 +87,6 @@ you did NOT.
   (outward-facing).
 - **Any git mutation** — see *VCS* above.
 - **Hand-editing `versions.env`'s `FLUTTER_VERSION`** — that's Renovate's job
-  (`.github/renovate.json`); bump only when the user asks.
+  (`.github/renovate.jsonc`); bump only when the user asks.
 - **Destructive Docker on shared state** (`docker system prune`, removing the user's
   images/volumes) — ask first.
