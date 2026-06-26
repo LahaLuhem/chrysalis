@@ -137,7 +137,7 @@ a *native* arm64 Linux image **cannot build Android apps**.
 - **Decision:** one dedicated manager (Renovate, `config:best-practices`, Mend-hosted) owns
   every version bump, replacing the hand-rolled `update_flutter_versions.sh` +
   `check_flutter_versions.yml` cron. Config lives in
-  [`.github/renovate.json`](./.github/renovate.json).
+  [`.github/renovate.jsonc`](./.github/renovate.jsonc).
 - **Why:** one tool beats scattered glue (a script here, a cron there). Less bespoke code to
   maintain, and Renovate opens, labels, and throttles the PRs itself. `config:best-practices`
   additionally SHA-pins the GitHub Actions and digest-pins the `ubuntu` base, which the old cron
