@@ -161,3 +161,19 @@ a *native* arm64 Linux image **cannot build Android apps**.
   Renovate pins the manifest-list digest.
 - **Cadence:** weekly (`schedule:weekly`), down from the old every-2h cron. Stable Flutter ships
   roughly quarterly, so frequent polling was wasteful.
+- **CI lint tools:** hadolint and actionlint are pinned the same way. Their versions live as
+  `# renovate:`-marked env vars in `.github/workflows/test.yml`, tracked by a second
+  `customManagers` entry via the `github-releases` datasource. The install step downloads the exact
+  release asset, verifies it against the publisher's `.sha256` / `checksums.txt`, then installs.
+  This replaced a step that curled `latest` hadolint and ran `download-actionlint.bash` from
+  `main`: unpinned, and a corrupt download once slipped through as a valid-looking HTTP 200 and
+  broke a run. Pinning plus checksum verification closes both the supply-chain gap and that flake.
+- **Why not lint Actions:** the standard alternative is official Actions like
+  `hadolint/hadolint-action`, which `best-practices` would SHA-pin automatically. We pin in the
+  workflow instead because `scripts/test.sh lint` is the single source of lint truth, run
+  identically locally and in CI, and it invokes `hadolint` / `actionlint` as binaries on `PATH`.
+  Pinning the versions in the workflow keeps CI installing the *same* tools `test.sh` runs. A lint
+  Action runs the tool its own way, which would either split CI from `test.sh` or force us to
+  reconcile the Action's pinned version with whatever `test.sh` installs locally. One coherent
+  system beats two kept in sync, and it reuses the custom-manager + `github-releases` mechanism
+  already in place for Flutter.
