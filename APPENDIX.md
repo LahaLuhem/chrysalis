@@ -5,6 +5,7 @@
 - [arm64 Linux cannot build Android apps (the x86-64 toolchain wall)](#arm64-android-build-limitation)
 - [Multi-arch via native matrix + push-by-digest + manifest merge](#digest-merge-multiarch)
 - [Publishing is gated to `master` and manual dispatch](#publish-gating)
+- [Version tracking via Renovate, not a bespoke cron](#renovate-version-tracking)
 
 <!-- TOC end -->
 
@@ -127,3 +128,36 @@ a *native* arm64 Linux image **cannot build Android apps**.
   Gating to `master` + explicit dispatch makes publishing intentional.
 - **Verification:** a publish is only "done" once `docker manifest inspect <ref>` shows both
   `linux/amd64` and `linux/arm64`. Never report success without it.
+
+---
+
+<a id="renovate-version-tracking"></a>
+## Version tracking via Renovate, not a bespoke cron
+
+- **Decision:** one dedicated manager (Renovate, `config:best-practices`, Mend-hosted) owns
+  every version bump, replacing the hand-rolled `update_flutter_versions.sh` +
+  `check_flutter_versions.yml` cron. Config lives in
+  [`.github/renovate.json`](./.github/renovate.json).
+- **Why:** one tool beats scattered glue (a script here, a cron there). Less bespoke code to
+  maintain, and Renovate opens, labels, and throttles the PRs itself. `config:best-practices`
+  additionally SHA-pins the GitHub Actions and digest-pins the `ubuntu` base, which the old cron
+  never did. Given the current wave of CI supply-chain attacks, pinning to immutable digests is
+  worth the extra PR noise.
+- **Why not Dependabot:** Dependabot only updates dependencies inside manifests of ecosystems it
+  understands. The Flutter SDK pin is a bare string in `versions.env`, resolved from Flutter's
+  releases JSON and consumed as a `git clone --branch` tag. No Dependabot ecosystem parses that,
+  and it has no regex/custom-manager escape hatch. Renovate's custom manager plus the
+  `flutter-version` datasource do exactly this.
+- **How the Flutter pin is tracked:** a `customManagers` regex binds the
+  `# renovate: datasource=flutter-version depName=flutter` marker above `FLUTTER_VERSION` in
+  `versions.env`. The `flutter-version` datasource marks only the `stable` channel as stable, so
+  with Renovate's default `ignoreUnstable` the pin only ever moves to a stable release, never a
+  `.pre` beta. The `versions.env` lint in `scripts/test.sh` is a backstop that rejects any
+  non-`x.y.z` value.
+- **One exclusion:** `docker:pinDigests` (pulled in by `best-practices`) would pin every `FROM`,
+  including the internal `ghcr.io/lahaluhem/android-sdk:latest` the flutter image builds on. That
+  tag is rebuilt and republished every run and must float, so a `packageRule` sets
+  `pinDigests: false` for it. `ubuntu:24.04` stays digest-pinned, which is multi-arch-safe because
+  Renovate pins the manifest-list digest.
+- **Cadence:** weekly (`schedule:weekly`), down from the old every-2h cron. Stable Flutter ships
+  roughly quarterly, so frequent polling was wasteful.
