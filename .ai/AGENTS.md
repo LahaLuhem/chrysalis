@@ -131,8 +131,10 @@ actionlint, shellcheck) run from the [`Linterpol`](https://github.com/LahaLuhem/
 image (`ghcr.io/lahaluhem/linterpol`, its own repo), which `test.sh` pulls on demand, so the
 tools need not be installed on the host and every run uses the same pinned versions. The
 default is digest-pinned and bumped by Renovate; override it with `LINTERPOL_IMAGE` (e.g. a
-local `linterpol:local` build). `container-structure-test` still installs via `brew`; on this
-OrbStack host the script points it at the right Docker socket automatically.
+local `linterpol:local` build). `container-structure-test` (used by the `image` target) runs
+from that same image too; since it inspects a built image, that step mounts the host's Docker
+socket into the container. Beyond Docker itself, the only host tool the suite still needs is
+`jq`, for the opt-in `multiarch` target.
 
 ## Code style (no separate CODESTYLE.md yet)
 
