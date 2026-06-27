@@ -42,11 +42,11 @@ need() {
 # resolve there. Override the image with LINTERPOL_IMAGE (e.g. a locally-built linterpol:local
 # when developing Linterpol itself). Pinned by digest; Renovate bumps it (.github/renovate.jsonc).
 # renovate: datasource=docker depName=ghcr.io/lahaluhem/linterpol
-LINTERPOL_IMAGE="${LINTERPOL_IMAGE:-ghcr.io/lahaluhem/linterpol:latest@sha256:172e3d10af7fc726fa57bea5f609fdf2fab34ad1c761c9f63f1eac89e6e9ce11}"
+LINTERPOL_IMAGE="${LINTERPOL_IMAGE:-ghcr.io/lahaluhem/linterpol:latest@sha256:10172405a9837f951e61b668f28880f8707cd664f5854e9576bf925e04abb0e4}"
 linterpol_ready=''
 
-# Make sure LINTERPOL_IMAGE is present locally, pulling it on demand (the default is a
-# public ghcr ref). A local-only tag that hasn't been built will fail the pull, with a hint.
+# Make sure LINTERPOL_IMAGE is present locally, pulling it on demand (the default is a public ghcr ref).
+# A local-only tag that hasn't been built will fail the pull, with a hint.
 ensure_linterpol_image() {
   [ -n "$linterpol_ready" ] && return 0
   if docker image inspect "$LINTERPOL_IMAGE" >/dev/null 2>&1; then
@@ -72,6 +72,23 @@ lint_tool() {
   fi
   ensure_linterpol_image
   docker run --rm -v "$repo_root:/work:ro" -w /work "$LINTERPOL_IMAGE" "$@"
+}
+
+# structure_test <image-under-test> <config>: run container-structure-test from the linterpol
+# image. The image-under-test lives in the host Docker daemon (built by run_image), so the
+# host's Docker socket is mounted in (Docker-out-of-Docker) and the container runs as root to
+# reach it. The specs use commandTests, which need the daemon driver (the tar driver can't
+# execute commands).
+structure_test() {
+  ensure_linterpol_image
+  local sock
+  sock="$(docker context inspect -f '{{.Endpoints.docker.Host}}' 2>/dev/null | sed 's|^unix://||' || true)"
+  [ -n "$sock" ] || sock='/var/run/docker.sock'
+  docker run --rm --user 0:0 \
+    -v "$sock:/var/run/docker.sock" \
+    -v "$repo_root:/work:ro" -w /work \
+    "$LINTERPOL_IMAGE" \
+    container-structure-test test --image "$1" --config "$2"
 }
 
 flutter_version() { grep -E '^FLUTTER_VERSION=' versions.env | cut -d= -f2- || true; }
@@ -105,16 +122,8 @@ run_lint() {
 
 # Builds for the host architecture only; CI covers both arches via the matrix.
 run_image() {
-  need container-structure-test 'brew install container-structure-test'
   if ! command -v docker >/dev/null 2>&1; then
     printf '%smissing tool:%s docker  (start OrbStack / Docker Desktop)\n' "$red" "$rst"; exit 2
-  fi
-
-  # container-structure-test talks to the Docker API directly and defaults to
-  # /var/run/docker.sock; point it at the CLI's configured endpoint (e.g. OrbStack).
-  if [ -z "${DOCKER_HOST:-}" ]; then
-    DOCKER_HOST="$(docker context inspect -f '{{.Endpoints.docker.Host}}' 2>/dev/null || true)"
-    [ -n "$DOCKER_HOST" ] && export DOCKER_HOST
   fi
 
   local ver arch base log
@@ -144,14 +153,14 @@ run_image() {
   rm -f "$log"
 
   section 'container-structure-test: android-sdk'
-  if container-structure-test test --image "$android_img" --config images/android-sdk/structure-test.yaml; then
+  if structure_test "$android_img" images/android-sdk/structure-test.yaml; then
     ok 'android-sdk structure'
   else
     bad 'android-sdk structure'
   fi
 
   section 'container-structure-test: flutter'
-  if container-structure-test test --image "$flutter_img" --config images/flutter/structure-test.yaml; then
+  if structure_test "$flutter_img" images/flutter/structure-test.yaml; then
     ok 'flutter structure'
   else
     bad 'flutter structure'
