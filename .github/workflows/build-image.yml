@@ -57,17 +57,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4
 
-      - name: Install container-structure-test
-        run: |
-          case "$(uname -m)" in
-            x86_64) arch=amd64 ;;
-            aarch64) arch=arm64 ;;
-            *) echo "unsupported arch: $(uname -m)"; exit 1 ;;
-          esac
-          sudo curl -fsSL -o /usr/local/bin/container-structure-test \
-            "https://storage.googleapis.com/container-structure-test/latest/container-structure-test-linux-$arch"
-          sudo chmod +x /usr/local/bin/container-structure-test
-
       - name: Login to GHCR
         if: inputs.push
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
@@ -93,7 +82,18 @@ jobs:
       - name: Structure test
         env:
           IMG: ${{ inputs.name }}
-        run: container-structure-test test --image "$IMG:test" --config "images/$IMG/structure-test.yaml"
+          # renovate: datasource=docker depName=ghcr.io/lahaluhem/linterpol
+          LINTERPOL_IMAGE: ghcr.io/lahaluhem/linterpol:latest@sha256:10172405a9837f951e61b668f28880f8707cd664f5854e9576bf925e04abb0e4
+        run: |
+          # container-structure-test from the pinned Linterpol image (same image as scripts/test.sh).
+          # The image-under-test was loaded into the runner's daemon by "Build for test (load)";
+          # mount the runner's Docker socket so the container reaches it, run as root for socket
+          # access, and use the default daemon driver (specs use commandTests; tar can't run those).
+          docker run --rm --user 0:0 \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$PWD:/work:ro" -w /work \
+            "$LINTERPOL_IMAGE" \
+            container-structure-test test --image "$IMG:test" --config "images/$IMG/structure-test.yaml"
 
       # Push by digest, reusing the cached layers from the test build above.
       - name: Build and push by digest
