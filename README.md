@@ -62,7 +62,7 @@ Here's each layer, and why it's there:
 | --- | --- | --- |
 | **Base** | the OS | `ubuntu` |
 | **Build toolchain** | build an Android app with Flutter | the JDK, the Android SDK (cmdline-tools, platform-tools, build-tools, a platform), `git`, `zip`/`unzip`, `curl`/`wget`, `build-essential`, `libstdc++6`, `locales` |
-| **Convenience (DX)** | handy, but not needed to build | `lcov` (for `flutter test --coverage` reports), `jq` |
+| **Convenience (DX)** | handy, but not needed to build | `lcov` (for `flutter test --coverage` reports), `jq`, plus the Dart CLIs `cider` and `dependency_validator` (see below) |
 | **Flutter** | run `flutter`/`dart`, build apps | Flutter cloned at the pinned version plus its bundled Dart SDK. This is the `flutter` image, built `FROM` `android-sdk`. |
 
 > **By architecture:** `flutter`, `dart`, and the JVM tooling run natively on both
@@ -75,12 +75,23 @@ Here's each layer, and why it's there:
 > the needless network call. Override with `-e BOT=false`.
 
 <details>
-<summary>Planned: Flutter DX tooling</summary>
+<summary>Flutter DX tools</summary>
 
-Convenience tools we may add later as global Dart packages
-(`dart pub global activate ...`), like [cider](https://pub.dev/packages/cider) for
-changelog and version bumps. Nothing installed yet; noted so there's an obvious home
-for it when the time comes.
+Two Dart CLIs are activated globally and put on `PATH`. Handy for project chores, not
+needed to build:
+
+- [`cider`](https://pub.dev/packages/cider): version bumps and `CHANGELOG.md` management.
+- [`dependency_validator`](https://pub.dev/packages/dependency_validator): flags missing,
+  unused, or mis-promoted dependencies.
+
+They run like any other command in the image, against your mounted project:
+
+```bash
+docker run --rm -v ${PWD}:/build -w /build ghcr.io/lahaluhem/flutter:stable dependency_validator
+docker run --rm -v ${PWD}:/build -w /build ghcr.io/lahaluhem/flutter:stable cider bump patch
+```
+
+Versions track pub.dev through Renovate, like everything else here.
 
 </details>
 

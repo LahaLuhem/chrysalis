@@ -76,6 +76,11 @@ bump and the two silently disagree.
   `FROM` digests and action SHAs; a custom manager handles the rest (the Flutter pin, the
   Linterpol lint image), which each need a `# renovate: datasource=... depName=...` line
   directly above the pin.
+- Exception: the Flutter DX CLIs (`cider`, `dependency_validator`) are pinned inline on the
+  chained `dart pub global activate` RUN in `images/flutter/Dockerfile` and tracked by a
+  `datasourceTemplate: dart` custom manager with no `# renovate:` marker (a marker between the
+  consecutive `RUN`s would trip hadolint DL3059). To add another, append
+  `&& dart pub global activate <pkg> <x.y.z>` to that RUN; the manager picks it up.
 - Don't hand-edit a tracked pin (`versions.env`'s `FLUTTER_VERSION` included) unless the user
   asks; that's Renovate's job. Any pin you do touch, verify against the upstream registry,
   never from memory.
