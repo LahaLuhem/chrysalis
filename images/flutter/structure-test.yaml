@@ -16,6 +16,16 @@ commandTests:
     command: dart
     args: ['--version']
     exitCode: 0
+  # DX CLIs from the flutter Dockerfile's "Flutter DX tooling" layer: prove they're on PATH and
+  # run. Version-agnostic on purpose (Renovate bumps them); --help is the stable exit-0 invocation.
+  - name: cider runs (changelog + version-bump DX tool)
+    command: cider
+    args: ['--help']
+    exitCode: 0
+  - name: dependency_validator runs (dependency-hygiene DX tool)
+    command: dependency_validator
+    args: ['--help']
+    exitCode: 0
 
 # The image ships with telemetry off and Flutter's version-freshness check skipped
 # (see the flutter Dockerfile): assert those env defaults are actually baked in.
