@@ -2,7 +2,7 @@
 #
 # Local test suite for chrysalis (a Docker image build/publish repo).
 #
-#   lint       Static checks: hadolint, actionlint, shellcheck, versions.env. The linters
+#   lint       Static checks: hadolint, actionlint, shellcheck, biome, versions.env. The linters
 #              run from the linterpol image, pulled on demand (override LINTERPOL_IMAGE).
 #   image      Build android-sdk + flutter for the host arch and assert their contents
 #              with container-structure-test, plus a version-match and arch invariant.
@@ -39,13 +39,13 @@ need() {
   exit 2
 }
 
-# The lint tools (hadolint, actionlint, shellcheck) run from the linterpol image, so they
+# The lint tools (hadolint, actionlint, shellcheck, biome) run from the linterpol image, so they
 # don't have to be installed on the host and every run (local or CI) uses the same pinned
 # versions. The repo is mounted read-only at /work, so the repo-relative paths callers pass
 # resolve there. Override the image with LINTERPOL_IMAGE (e.g. a locally-built linterpol:local
 # when developing Linterpol itself). Pinned by digest; Renovate bumps it (.github/renovate.jsonc).
 # renovate: datasource=docker depName=ghcr.io/lahaluhem/linterpol
-LINTERPOL_IMAGE="${LINTERPOL_IMAGE:-ghcr.io/lahaluhem/linterpol:latest@sha256:7025a7405bd313fb33c030b941d738ac6c94b87250a30d94b4248441867aa2e2}"
+LINTERPOL_IMAGE="${LINTERPOL_IMAGE:-ghcr.io/lahaluhem/linterpol:latest@sha256:adf0fc75f908d3dfd4956eb3b5515b5fc15f43c58fc34387b094a9e05c886ee8}"
 linterpol_ready=''
 
 # Make sure LINTERPOL_IMAGE is present locally, pulling it on demand (the default is a public ghcr ref).
@@ -118,6 +118,9 @@ run_lint() {
 
   section 'shellcheck (shell scripts)'
   if lint_tool shellcheck scripts/*.sh; then ok 'scripts clean'; else bad 'shellcheck'; fi
+
+  section 'biome (JSON/JSONC)'
+  if lint_tool biome lint .; then ok 'JSON/JSONC clean'; else bad 'biome'; fi
 
   section 'versions.env sanity'
   check_versions_env
