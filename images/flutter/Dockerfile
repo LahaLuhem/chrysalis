@@ -11,7 +11,10 @@ ENV FLUTTER_HOME=/opt/flutter \
     FLUTTER_VERSION=$flutter_version
 ENV FLUTTER_ROOT=$FLUTTER_HOME
 
-ENV PATH=${PATH}:${FLUTTER_HOME}/bin:${FLUTTER_HOME}/bin/cache/dart-sdk/bin
+# `dart pub global activate` installs tool executables under PUB_CACHE; its bin/ on PATH makes
+# them bare commands. /root/.pub-cache is Dart's default for root; set explicitly for clarity.
+ENV PUB_CACHE=/root/.pub-cache
+ENV PATH=${PATH}:${FLUTTER_HOME}/bin:${FLUTTER_HOME}/bin/cache/dart-sdk/bin:${PUB_CACHE}/bin
 
 # Quiet CI defaults (override with `-e BOT=false`): FLUTTER_SUPPRESS_ANALYTICS no-ops Flutter analytics; BOT=true trips flutter+dart bot detection,
 # which no-ops Dart analytics and skips Flutter's version-freshness check.
@@ -28,3 +31,9 @@ RUN yes | flutter doctor --android-licenses \
     && chown -R root:root ${FLUTTER_HOME}
 
 RUN flutter precache --android
+
+# --- Flutter DX tooling: global Dart CLIs on PATH (DX only, not needed to build) ---
+# cider: version bumps + CHANGELOG. dependency_validator: flags missing/unused/mis-promoted deps.
+# Pinned exact and Renovate-bumped (dart-global custom manager in ../../.github/renovate.jsonc).
+RUN dart pub global activate cider 0.2.10 \
+    && dart pub global activate dependency_validator 5.0.5
