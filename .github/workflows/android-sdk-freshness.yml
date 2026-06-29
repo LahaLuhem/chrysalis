@@ -1,0 +1,63 @@
+name: Android SDK freshness
+
+# Weekly check that the Android SDK pins in images/android-sdk/Dockerfile (build-tools,
+# platform) are still the latest stable packages in Google's manifest. Renovate can't
+# track these: its customDatasource can't parse the manifest XML, and the scrapeable HTML
+# pages lag or pre-announce packages that aren't installable yet. So this stands in for a
+# Renovate "update available" PR: on drift it opens (or updates) one tracking issue, and
+# closes it once the pins catch up. The bump itself stays manual (verify-before-pin).
+# scripts/check-android-sdk.sh holds the logic and runs locally too.
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'  # Mondays 06:00 UTC, matching Renovate's weekly cadence
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Check Android SDK pins against Google's manifest
+        id: check
+        run: bash scripts/check-android-sdk.sh
+
+      - name: Open, update, or close the tracking issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BEHIND: ${{ steps.check.outputs.behind }}
+          DETAILS: ${{ steps.check.outputs.details }}
+        shell: bash
+        run: |
+          label='android-sdk-update'
+          title='Android SDK pins are behind upstream'
+
+          # Idempotent: ensure the tracking label exists before we list/create against it.
+          gh label create "$label" --force \
+            --color FBCA04 \
+            --description "Android SDK build-tools/platform pin is behind Google's manifest"
+
+          existing="$(gh issue list --label "$label" --state open --json number --jq '.[0].number // empty')"
+
+          if [ "$BEHIND" = "true" ]; then
+            intro='These Android SDK pins are behind the latest stable packages in the upstream manifest:'
+            footer="Bump them in \`images/android-sdk/Dockerfile\` (\`ANDROID_BUILD_TOOLS_VERSION\` / \`ANDROID_PLATFORM_VERSION\`), verifying against the manifest first. Filed and maintained by the weekly \`android-sdk-freshness\` workflow, which updates this issue as versions move and closes it once the pins are current."
+            body="$(printf '%s\n\n%s\n%s\n' "$intro" "$DETAILS" "$footer")"
+            if [ -n "$existing" ]; then
+              gh issue edit "$existing" --body "$body"
+              echo "updated issue #$existing"
+            else
+              gh issue create --label "$label" --title "$title" --body "$body"
+            fi
+          elif [ -n "$existing" ]; then
+            gh issue close "$existing" --comment 'Android SDK pins are current again. Closing automatically.'
+            echo "closed issue #$existing"
+          else
+            echo 'Android SDK pins are current; nothing to do.'
+          fi

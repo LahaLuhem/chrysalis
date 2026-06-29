@@ -16,3 +16,12 @@ commandTests:
     command: dart
     args: ['--version']
     exitCode: 0
+
+# The image ships with telemetry off and Flutter's version-freshness check skipped
+# (see the flutter Dockerfile): assert those env defaults are actually baked in.
+metadataTest:
+  envVars:
+    - key: FLUTTER_SUPPRESS_ANALYTICS
+      value: "true"
+    - key: BOT
+      value: "true"
