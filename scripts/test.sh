@@ -6,11 +6,14 @@
 #              run from the linterpol image, pulled on demand (override LINTERPOL_IMAGE).
 #   image      Build android-sdk + flutter for the host arch and assert their contents
 #              with container-structure-test, plus a version-match and arch invariant.
+#   apk        Build a debug APK from a throwaway app in the flutter image, proving the
+#              Android toolchain works end to end (arm64 runs it under x86 emulation).
+#              Slow; opt-in, not part of `all`.
 #   multiarch  Build android-sdk for amd64 + arm64 (amd64 emulated) and assert the
 #              resulting manifest carries both arches. Slow; opt-in, not part of `all`.
 #   all        lint + image.
 #
-# Usage: scripts/test.sh [lint|image|multiarch|all]   (default: all)
+# Usage: scripts/test.sh [lint|image|apk|multiarch|all]   (default: all)
 #
 set -euo pipefail
 
@@ -120,37 +123,48 @@ run_lint() {
   check_versions_env
 }
 
-# Builds for the host architecture only; CI covers both arches via the matrix.
+# Host-arch image tags (CI covers both arches via the matrix).
+img_android='chrysalis-test/android-sdk:local'
+img_flutter='chrysalis-test/flutter:local'
+
+# build_host_images: build android-sdk + flutter for the host arch into the tags above.
+build_host_images() {
+  local ver base log
+  ver="$(flutter_version)"
+  base='ghcr.io/lahaluhem/android-sdk:latest'
+  log="$(mktemp)"
+
+  section 'build android-sdk (host arch)'
+  if docker buildx build --load -t "$img_android" images/android-sdk >"$log" 2>&1; then
+    ok 'built android-sdk'
+  else
+    bad 'android-sdk build'; tail -n 30 "$log"; rm -f "$log"; return 1
+  fi
+
+  section 'build flutter (host arch)'
+  if docker buildx build --load \
+       --build-context "$base=docker-image://$img_android" \
+       --build-arg "flutter_version=$ver" \
+       -t "$img_flutter" images/flutter >"$log" 2>&1; then
+    ok 'built flutter'
+  else
+    bad 'flutter build'; tail -n 30 "$log"; rm -f "$log"; return 1
+  fi
+  rm -f "$log"
+}
+
 run_image() {
   if ! command -v docker >/dev/null 2>&1; then
     printf '%smissing tool:%s docker  (start OrbStack / Docker Desktop)\n' "$red" "$rst"; exit 2
   fi
 
-  local ver arch base log
+  build_host_images || return
+
+  local ver arch android_img flutter_img
   ver="$(flutter_version)"
   arch="$(uname -m)"
-  base='ghcr.io/lahaluhem/android-sdk:latest'
-  log="$(mktemp)"
-  local android_img='chrysalis-test/android-sdk:local'
-  local flutter_img='chrysalis-test/flutter:local'
-
-  section 'build android-sdk (host arch)'
-  if docker buildx build --load -t "$android_img" images/android-sdk >"$log" 2>&1; then
-    ok 'built android-sdk'
-  else
-    bad 'android-sdk build'; tail -n 30 "$log"; rm -f "$log"; return
-  fi
-
-  section 'build flutter (host arch)'
-  if docker buildx build --load \
-       --build-context "$base=docker-image://$android_img" \
-       --build-arg "flutter_version=$ver" \
-       -t "$flutter_img" images/flutter >"$log" 2>&1; then
-    ok 'built flutter'
-  else
-    bad 'flutter build'; tail -n 30 "$log"; rm -f "$log"; return
-  fi
-  rm -f "$log"
+  android_img="$img_android"
+  flutter_img="$img_flutter"
 
   section 'container-structure-test: android-sdk'
   if structure_test "$android_img" images/android-sdk/structure-test.yaml; then
@@ -187,6 +201,32 @@ run_image() {
     else
       bad 'emulator absent on amd64 (unexpected)'
     fi
+  fi
+}
+
+# Builds a debug APK from a throwaway app in the flutter image, proving the Android
+# toolchain works end to end (on arm64 the SDK build tools run under x86 emulation).
+# Slow; opt-in, not part of `all`.
+run_apk() {
+  if ! command -v docker >/dev/null 2>&1; then
+    printf '%smissing tool:%s docker  (start OrbStack / Docker Desktop)\n' "$red" "$rst"; exit 2
+  fi
+
+  build_host_images || return
+
+  section 'flutter build apk --debug (throwaway app)'
+  # The $-expansions below run in the container's shell, not here, hence single quotes.
+  # shellcheck disable=SC2016
+  if docker run --rm "$img_flutter" bash -c '
+        set -euo pipefail
+        app="$(mktemp -d)/smoke"
+        flutter create "$app" >/dev/null
+        cd "$app"
+        flutter build apk --debug
+        find build -name "*.apk" | grep -q .'; then
+    ok 'built a debug APK'
+  else
+    bad 'flutter build apk --debug'
   fi
 }
 
@@ -256,9 +296,10 @@ main() {
   case "$cmd" in
     lint)      run_lint ;;
     image)     run_image ;;
+    apk)       run_apk ;;
     multiarch) run_multiarch ;;
     all)       run_lint; run_image ;;
-    *) printf 'usage: %s [lint|image|multiarch|all]\n' "$0"; exit 2 ;;
+    *) printf 'usage: %s [lint|image|apk|multiarch|all]\n' "$0"; exit 2 ;;
   esac
 
   echo
