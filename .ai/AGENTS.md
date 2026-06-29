@@ -118,7 +118,7 @@ chrysalis/
 
 `scripts/test.sh` runs the suite locally, no CI round-trip needed:
 
-- `scripts/test.sh lint` runs hadolint, actionlint, shellcheck, and a `versions.env` check.
+- `scripts/test.sh lint` runs hadolint, actionlint, shellcheck, biome, and a `versions.env` check.
 - `scripts/test.sh image` builds `android-sdk` + `flutter` for the host arch and asserts
   their contents with [container-structure-test](https://github.com/GoogleContainerTools/container-structure-test)
   (specs in `images/<name>/structure-test.yaml`), plus a version match and the arm64 emulator invariant.
@@ -127,7 +127,7 @@ chrysalis/
 - `scripts/test.sh all` runs lint + image.
 
 Run it before touching the Dockerfiles or the workflow. The lint tools (hadolint,
-actionlint, shellcheck) run from the [`Linterpol`](https://github.com/LahaLuhem/linterpol)
+actionlint, shellcheck, biome) run from the [`Linterpol`](https://github.com/LahaLuhem/linterpol)
 image (`ghcr.io/lahaluhem/linterpol`, its own repo), which `test.sh` pulls on demand, so the
 tools need not be installed on the host and every run uses the same pinned versions. The
 default is digest-pinned and bumped by Renovate; override it with `LINTERPOL_IMAGE` (e.g. a

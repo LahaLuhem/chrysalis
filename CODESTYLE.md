@@ -8,7 +8,7 @@ Two habits cut across everything:
 
 - **Comments explain *why*, not *what*.** The hairier the layer, the more it earns a
   comment; push the long story into an [APPENDIX.md](APPENDIX.md) anchor and link it.
-- **Lint before "done".** `scripts/test.sh lint` runs hadolint, actionlint, shellcheck, and
+- **Lint before "done".** `scripts/test.sh lint` runs hadolint, actionlint, shellcheck, biome, and
   a `versions.env` sanity check from the pinned Linterpol image. A change isn't done until
   it's clean.
 
