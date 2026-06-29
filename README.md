@@ -60,7 +60,7 @@ Here's each layer, and why it's there:
 
 | Layer | Why it's there | What's in it |
 | --- | --- | --- |
-| **Base** | the OS | `ubuntu:24.04` |
+| **Base** | the OS | `ubuntu` |
 | **Build toolchain** | build an Android app with Flutter | JDK 21, the Android SDK (cmdline-tools, platform-tools, build-tools 36, platform android-36), `git`, `zip`/`unzip`, `curl`/`wget`, `build-essential`, `libstdc++6`, `locales` |
 | **Convenience (DX)** | handy, but not needed to build | `lcov` (for `flutter test --coverage` reports), `jq` |
 | **Flutter** | run `flutter`/`dart`, build apps | Flutter cloned at the pinned version plus its bundled Dart SDK. This is the `flutter` image, built `FROM` `android-sdk`. |
@@ -69,6 +69,10 @@ Here's each layer, and why it's there:
 > `amd64` and `arm64`. The Android SDK build tools (`aapt2`, `cmake`, the NDK) are
 > x86-64-only, so building APKs on `arm64` runs them under emulation. See
 > [Architecture support](#architecture-support).
+
+> **Quiet by default:** the `flutter` image ships with analytics off (Flutter and
+> Dart) and Flutter's version-update check skipped, so CI runs stay quiet and skip
+> the needless network call. Override with `-e BOT=false`.
 
 <details>
 <summary>Planned: Flutter DX tooling</summary>
