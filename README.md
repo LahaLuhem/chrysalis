@@ -2,6 +2,9 @@
 
 [![Build images](https://github.com/LahaLuhem/chrysalis/actions/workflows/build_and_push.yml/badge.svg?branch=master)](https://github.com/LahaLuhem/chrysalis/actions/workflows/build_and_push.yml)
 [![Test](https://github.com/LahaLuhem/chrysalis/actions/workflows/test.yml/badge.svg?branch=master)](https://github.com/LahaLuhem/chrysalis/actions/workflows/test.yml)
+![multi-arch](https://img.shields.io/badge/arch-amd64%20%7C%20arm64-2496ED)
+[![ghcr.io: flutter](https://img.shields.io/badge/ghcr.io-lahaluhem%2Fflutter-2496ED?logo=docker&logoColor=white)](https://github.com/LahaLuhem/chrysalis/pkgs/container/flutter)
+[![ghcr.io: android-sdk](https://img.shields.io/badge/ghcr.io-lahaluhem%2Fandroid--sdk-2496ED?logo=docker&logoColor=white)](https://github.com/LahaLuhem/chrysalis/pkgs/container/android-sdk)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/LahaLuhem/chrysalis/pulls)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![GitHub issues](https://img.shields.io/github/issues/LahaLuhem/chrysalis.svg)](https://github.com/LahaLuhem/chrysalis/issues)
