@@ -1,0 +1,41 @@
+name: Cleanup old package versions
+
+# Each republish moves the shared moving tags (flutter:stable, android-sdk:latest) onto a fresh
+# multi-arch index and orphans the one they pointed at, so untagged versions pile up across both
+# GHCR packages (flutter, android-sdk). This prunes them on a weekly cron: it keeps the 10 newest
+# untagged generations per package and never deletes anything younger than 30 days, a safe margin
+# for a digest a consumer has sha-pinned (they get at least that long to bump off it). Tagged
+# versions are left alone, so flutter:stable, the per-version flutter:<x.y.z> tags, android-sdk:latest
+# and their per-arch children all survive; only untagged versions are in scope.
+#
+# It starts in dry-run, so it only logs what it WOULD delete. Review a run's output first, then flip
+# dry-run to false to actually prune. Deleting published versions is outward-facing.
+#
+# Longer-term fix: immutable per-build tags, so consumers pin a retained tag instead of a :latest
+# digest and cleanup needs no age/keep guards. Tracked separately.
+
+on:
+  schedule:
+    - cron: "30 4 * * 1"   # Mondays 04:30 UTC, matching Renovate's weekly cadence
+  workflow_dispatch:
+
+# One cleanup at a time; don't cancel an in-flight run.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prune untagged generations (keep newest 10, nothing younger than 30 days)
+        uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f # v1
+        with:
+          packages: flutter,android-sdk
+          keep-n-untagged: 10
+          older-than: "30 days"
+          dry-run: true
