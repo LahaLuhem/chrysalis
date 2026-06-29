@@ -3,7 +3,7 @@
 # x86-64-only on Linux; see ../../APPENDIX.md#arm64-android-build-limitation.
 #
 # Layers (see "What's in the image" in the README):
-#   Base             ubuntu:24.04
+#   Base             ubuntu
 #   Build toolchain  JDK + the Android SDK (everything below)
 #   Convenience (DX) jq, lcov
 # The flutter image adds the Flutter layer on top.
@@ -41,6 +41,27 @@ RUN apt-get update \
 # the JDK deterministically instead of guessing via PATH.
 ARG TARGETARCH
 ENV JAVA_HOME=/usr/lib/jvm/java-21-openjdk-${TARGETARCH}
+
+# --- Build toolchain: x86-64 runtime libs for emulated Android tools (arm64) -
+# Google ships the Android Linux build tools (aapt2, zipalign, ...) as x86-64 ELF
+# only, so on arm64 they run solely under host x86-64 emulation (Apple Silicon
+# Docker/OrbStack: transparent; other arm64 Linux must register QEMU once with
+# `docker run --privileged --rm tonistiigi/binfmt --install amd64`). This set is
+# the empirical minimum the emulated tools load: libc6 + libgcc-s1 cover aapt2,
+# zipalign, cmake and ninja; zlib1g (libz.so.1) is what the NDK clang needs for
+# the default app's CMake step. libc++ is bundled in build-tools/lib64, and
+# nothing links libstdc++.so.6. Emulated, NOT native Android; amd64 is
+# unaffected. See ../../APPENDIX.md#arm64-android-build-limitation.
+RUN if [ "$(uname -m)" = "aarch64" ]; then \
+      set -eux; \
+      codename="$(awk -F= '$1=="VERSION_CODENAME"{print $2}' /etc/os-release)"; \
+      sed -i 's|^URIs: .*|&\nArchitectures: arm64|' /etc/apt/sources.list.d/ubuntu.sources; \
+      printf 'Types: deb\nURIs: http://archive.ubuntu.com/ubuntu\nSuites: %s %s-updates\nComponents: main universe\nArchitectures: amd64\nSigned-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg\n' "$codename" "$codename" > /etc/apt/sources.list.d/amd64.sources; \
+      dpkg --add-architecture amd64; \
+      apt-get update; \
+      apt-get install -y --no-install-recommends libc6:amd64 libgcc-s1:amd64 zlib1g:amd64; \
+      rm -rf /var/lib/apt/lists/*; \
+    fi
 
 # --- Build toolchain: locale -----------------------------------------------
 RUN echo "en_US.UTF-8 UTF-8" > /etc/locale.gen \

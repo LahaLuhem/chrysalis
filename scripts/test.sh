@@ -202,6 +202,22 @@ run_image() {
       bad 'emulator absent on amd64 (unexpected)'
     fi
   fi
+
+  # arm64 runs the (x86-64) Android tools only under host emulation; the image bakes the
+  # x86-64 libs they load (asserted in structure-test.yaml). Here, prove aapt2 actually
+  # runs. That needs host x86-64 emulation (Apple Silicon Docker/OrbStack: built-in; bare
+  # arm64 Linux: `docker run --privileged --rm tonistiigi/binfmt --install amd64`), so a
+  # non-runnable aapt2 is a SKIP, not a failure.
+  if [ "$arch" = "arm64" ] || [ "$arch" = "aarch64" ]; then
+    section 'arm64 Android tools run under x86-64 emulation'
+    # $-expansions run in the container shell, not here.
+    # shellcheck disable=SC2016
+    if docker run --rm "$android_img" sh -c 'aapt2="$(ls "$ANDROID_HOME"/build-tools/*/aapt2 | head -1)"; exec "$aapt2" version' >/dev/null 2>&1; then
+      ok 'aapt2 runs (x86-64 emulation available)'
+    else
+      skip 'aapt2 not runnable here; register emulation: docker run --privileged --rm tonistiigi/binfmt --install amd64'
+    fi
+  fi
 }
 
 # Builds a debug APK from a throwaway app in the flutter image, proving the Android
