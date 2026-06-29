@@ -6,6 +6,7 @@
 - [Multi-arch via native matrix + push-by-digest + manifest merge](#digest-merge-multiarch)
 - [Publishing is gated to `master` and manual dispatch](#publish-gating)
 - [Version tracking via Renovate, not a bespoke cron](#renovate-version-tracking)
+- [Quiet-by-default: telemetry off, version check skipped](#quiet-ci-defaults)
 
 <!-- TOC end -->
 
@@ -177,3 +178,23 @@ a *native* arm64 Linux image **cannot build Android apps**.
   reconcile the Action's pinned version with whatever `test.sh` installs locally. One coherent
   system beats two kept in sync, and it reuses the custom-manager + `github-releases` mechanism
   already in place for Flutter.
+
+---
+
+<a id="quiet-ci-defaults"></a>
+## Quiet-by-default: telemetry off, version check skipped
+
+- **Decision:** the `flutter` image bakes `FLUTTER_SUPPRESS_ANALYTICS=true` + `BOT=true`. Together
+  they no-op Flutter *and* Dart analytics and skip Flutter's version-freshness check (a per-job
+  network hit in fresh CI containers). Overridable at runtime (`-e BOT=false`).
+- **Why `BOT`:** the version check has no dedicated env var (`--no-version-check` is
+  per-invocation only), so bot detection is its only bakeable lever. `flutter` and `dart` read the
+  same env list via flutter_tools' `BotDetector` / dartdev's `isBot()`
+  (`lib/src/base/bot_detector.dart`, an internal lever, not user-facing docs); `BOT=true` trips it,
+  covering both the version check and analytics for every user (an env var, not a per-`HOME`
+  opt-out file). `FLUTTER_SUPPRESS_ANALYTICS` is the self-documenting belt for Flutter's side.
+- **Why not `CI=true`:** redundant and too broad. `BOT` already trips bot detection, so `CI` adds
+  nothing for flutter/dart; meanwhile `CI` is honoured by many unrelated tools (npm, test runners),
+  so baking it would force everything a consumer runs in the container into CI mode, a runtime
+  assumption the portable-image rule avoids. Real CI sets `CI` itself anyway, so baking it would
+  only surprise local `docker run`. `BOT` is the surgical pick.
