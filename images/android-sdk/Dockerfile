@@ -5,7 +5,7 @@
 # Layers (see "What's in the image" in the README):
 #   Base             ubuntu
 #   Build toolchain  JDK + the Android SDK (everything below)
-#   Convenience (DX) jq, lcov
+#   Convenience (DX) jq, lcov, yq
 # The flutter image adds the Flutter layer on top.
 FROM ubuntu:26.04@sha256:53958ec7b67c2c9355df922dd08dbf0360611f8c3cdb656875e81873db9ffdba
 
@@ -95,3 +95,12 @@ ENV ANDROID_BUILD_TOOLS_VERSION=36.0.0
 RUN yes | sdkmanager \
     "platforms;android-$ANDROID_PLATFORM_VERSION" \
     "build-tools;$ANDROID_BUILD_TOOLS_VERSION"
+
+# --- Convenience (DX): yq -----------------------------------------------------
+# The jq for YAML, handy for poking at Flutter project config (pubspec.yaml,
+# dependency_validator.yaml, slang, ...). Static Go binary from mikefarah/yq, arch-matched
+# (its amd64/arm64 asset names are exactly Docker's TARGETARCH). Renovate-tracked (github-releases).
+# renovate: datasource=github-releases depName=mikefarah/yq
+ENV YQ_VERSION=v4.53.3
+RUN wget -q "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_${TARGETARCH}" -O /usr/local/bin/yq \
+    && chmod +x /usr/local/bin/yq
