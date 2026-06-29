@@ -42,7 +42,7 @@ need() {
 # resolve there. Override the image with LINTERPOL_IMAGE (e.g. a locally-built linterpol:local
 # when developing Linterpol itself). Pinned by digest; Renovate bumps it (.github/renovate.jsonc).
 # renovate: datasource=docker depName=ghcr.io/lahaluhem/linterpol
-LINTERPOL_IMAGE="${LINTERPOL_IMAGE:-ghcr.io/lahaluhem/linterpol:latest@sha256:4abb3cb1f9b4c67ee46de4bb83db9d7a5d594f8d783a8b8fda2254248faeb46c}"
+LINTERPOL_IMAGE="${LINTERPOL_IMAGE:-ghcr.io/lahaluhem/linterpol:latest@sha256:7025a7405bd313fb33c030b941d738ac6c94b87250a30d94b4248441867aa2e2}"
 linterpol_ready=''
 
 # Make sure LINTERPOL_IMAGE is present locally, pulling it on demand (the default is a public ghcr ref).
