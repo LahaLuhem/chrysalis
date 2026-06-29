@@ -32,6 +32,10 @@ mistagged push is visible to anyone who pulls — so publishing is a confirm-fir
   bug): just do them.
 - **Surface findings that change the premise.** If verification contradicts an assumption
   (as the arm64 limitation did), stop and report before building on it.
+- **Refactor first when it clears the way.** If a change would sit cleaner on a different
+  structure (or upcoming work will strain the current one), do the enabling,
+  behaviour-preserving refactor as step one, then build the change on it. Repo longevity beats
+  short-term speed. Full rationale: `~/.claude/rules/refactor-first.md`.
 
 ## VCS — the user manages git
 
