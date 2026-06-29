@@ -2,7 +2,7 @@
 
 - [`AGENTS.md` and `CLAUDE.md` are symlinks into `.ai/`](#ai-files-symlinked)
 - [Why this fork exists: maintained *and* multi-arch](#why-multi-arch)
-- [arm64 Linux cannot build Android apps (the x86-64 toolchain wall)](#arm64-android-build-limitation)
+- [arm64 Linux builds Android only under x86-64 emulation](#arm64-android-build-limitation)
 - [Multi-arch via native matrix + push-by-digest + manifest merge](#digest-merge-multiarch)
 - [Publishing is gated to `master` and manual dispatch](#publish-gating)
 - [Version tracking via Renovate, not a bespoke cron](#renovate-version-tracking)
@@ -66,31 +66,74 @@ trade-offs. The README, [`.ai/AGENTS.md`](./.ai/AGENTS.md), and
 ---
 
 <a id="arm64-android-build-limitation"></a>
-## arm64 Linux cannot build Android apps (the x86-64 toolchain wall)
+## arm64 Linux builds Android only under x86-64 emulation
 
-**Verified empirically** on a native arm64 host (Apple Silicon + OrbStack, no QEMU/binfmt):
-a *native* arm64 Linux image **cannot build Android apps**.
+**Decision (resolved):** ship multi-arch and make the arm64 image *able* to build Android by
+baking in the x86-64 runtime libs its (x86-64) Android tools need, so builds work on any host
+that can emulate x86-64. Validated on Apple Silicon + OrbStack with a real
+`flutter build apk --debug` that produced an APK. It is **emulated, never native**; do not
+claim otherwise.
 
-- **Google ships the Linux Android SDK tools as x86-64 only.** In the arm64 image,
-  `aapt2`, `aapt`, `zipalign`, `dexdump`, `adb`, `fastboot`, `cmake`, `ninja`, and the NDK
-  toolchain are all x86-64 ELF binaries. There are no arm64 Linux variants in Google's SDK
-  repository. Even the Android Gradle Plugin, *running on arm64*, downloads the `-linux`
-  (x86-64) maven `aapt2` because no `linux-arm64` classifier exists.
-- **`flutter build apk --debug` fails on native arm64** at
-  `:app:configureCMakeDebug[arm64-v8a]` with
-  `Dynamic loader not found: /lib64/ld-linux-x86-64.so.2` — i.e. an x86 program on an arm64
-  OS with no emulation.
-- **What *does* run native arm64:** `flutter`, `dart`, `java` (aarch64), and the JVM-wrapper
-  tools (`d8`, `apksigner`). So the arm64 image is genuinely useful for
-  `flutter test`/`analyze`/`pub` and web builds, but **Android builds require x86 emulation**
-  (host `binfmt`/QEMU), which is slow and defeats "native = fast".
-- **cirruslabs had the same limitation.** Their Dockerfiles do nothing arm64-specific, and
-  their CI only smoke-tested the **x86_64** emulator path — so the published arm64 Android
-  build was never actually verified. A present manifest is not a verified build.
-- **Implication / open decision:** the arm64 strategy is a product choice — ship multi-arch
-  and document the caveat; bundle `qemu-user-static`; or stay amd64-only. (Decision pending
-  with the user as of writing.) Whatever is chosen, **do not document or claim that arm64
-  builds Android apps natively.**
+### The wall
+Google ships the Linux Android SDK tools (`aapt2`, `aapt`, `zipalign`, `dexdump`, `adb`,
+`cmake`, `ninja`, the NDK) as **x86-64 only**; there are no arm64 Linux variants, and the
+Android Gradle Plugin on arm64 still fetches the `-linux` (x86-64) maven `aapt2`. On a bare
+arm64 host `flutter build apk` reaches `:app:configureCMakeDebug[arm64-v8a]` and dies with
+`Dynamic loader not found: /lib64/ld-linux-x86-64.so.2`.
+
+### What actually makes it work: two ingredients
+That loader error is the tell. It takes **both**:
+
+1. **Host x86-64 emulation.** Verified: an x86-64 *static* binary runs inside an arm64
+   container on OrbStack with no setup. The emulation is the host's to provide.
+2. **x86-64 userland libs in the image.** A *dynamic* x86-64 binary still fails until the
+   image carries the x86-64 loader and libs. `readelf` on the real tools pins the exact set:
+   - `aapt2` needs `libc6` + `libgcc-s1`.
+   - NDK `clang` needs `libc6` + `libgcc-s1` + **`zlib1g`** (`libz.so.1`); even the default
+     app triggers an NDK CMake configure, so this is not optional.
+   - `cmake` statically links its C++ runtime (needs `libc6` only); `aapt`/`zipalign` use the
+     `libc++.so` bundled in `build-tools/lib64`; **nothing links `libstdc++.so.6`**.
+
+   So the minimal baked set is **`libc6` + `libgcc-s1` + `zlib1g`** (the arm64-guarded
+   emulation-libs layer in `images/android-sdk/Dockerfile`). amd64 is untouched.
+
+### Host support matrix
+| Host | x86-64 emulation | Setup |
+| --- | --- | --- |
+| Apple Silicon + OrbStack | built-in | none |
+| Apple Silicon + Docker Desktop | yes | enable "Use Rosetta…", else QEMU |
+| arm64 Linux (Graviton, Pi, CI) | only if registered | `docker run --privileged --rm tonistiigi/binfmt --install amd64` |
+| arm64 Linux, nothing registered | none | builds still can't run the tools |
+
+### Performance
+Most of an Android build is JVM work (Gradle, AGP, `d8`/`r8`) that runs **native arm64**.
+Only the native tools (`aapt2`, `zipalign`, and `cmake`/`ninja`/clang for NDK steps) are
+emulated, so overhead scales with how much native code you build: mild on Apple Silicon
+(Rosetta-class), heavier on QEMU hosts.
+
+### Rejected paths
+- **Document-only (consumer installs the libs).** Clunky; pushes a setup chore onto every
+  user when a tiny image layer removes it.
+- **Bundle `qemu-user-static` + per-tool wrapper scripts.** Self-contained on any arm64
+  Linux, but fragile and high-maintenance (every native tool wrapped; AGP/NDK bumps add
+  more). The host-emulation requirement is the honest, low-maintenance floor instead.
+- **A separate lean vs build-capable image.** The strict lib set is three packages, so the
+  split would double the build matrix, tags, and maintenance to save almost nothing. Revisit
+  only if a heavy x86-64 NDK is ever bundled (which isn't in scope for amd64 either).
+- **An iOS/macOS `flutter-mac` image.** Out of scope, and not a Docker image at all: iOS
+  needs a **macOS VM on Apple Silicon Mac hardware** (Tart / Apple `Virtualization.framework`),
+  a separate Mac-only product. Do iOS on macOS CI runners; a Tart image, if ever wanted, is a
+  separate sibling repo.
+
+### Guards
+`images/android-sdk/structure-test.yaml` asserts the x86-64 loader is present (deterministic,
+runs on both arches in CI). `scripts/test.sh` (`image` target) additionally runs `aapt2` under
+emulation on arm64, skipping rather than failing where the host has no emulation registered.
+
+### Prior art
+cirruslabs shipped arm64 manifests with the same x86-64-tool reality but only ever
+smoke-tested the x86_64 emulator path, so their arm64 Android build was never actually
+verified. A present manifest is not a verified build.
 
 ---
 

@@ -24,6 +24,12 @@ fileExistenceTests:
   - name: platform android-36 (android.jar)
     path: /opt/android-sdk-linux/platforms/android-36/android.jar
     shouldExist: true
+  - name: x86-64 dynamic loader present (arm64 runs the SDK tools under emulation)
+    # On amd64 this is the native loader. On arm64 it exists only because the
+    # Dockerfile bakes libc6:amd64 (the arm64 emulation-libs layer); its absence
+    # there means the x86-64 libs were dropped and Android builds would fail.
+    path: /lib64/ld-linux-x86-64.so.2
+    shouldExist: true
 
 commandTests:
   - name: sdkmanager is runnable

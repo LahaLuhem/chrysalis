@@ -1,8 +1,8 @@
 # CODESTYLE.md — `chrysalis`
 
-Code-style conventions for this repo: Dockerfiles, workflow YAML, Bash, and the
-single-source-of-truth rule for version pins. Project facts and hard rules live in
-[AGENTS.md](AGENTS.md); design rationale lives in [APPENDIX.md](APPENDIX.md).
+Code-style conventions for this repo, for humans and coding agents alike: Dockerfiles,
+workflow YAML, Bash, and the single-source-of-truth rule for version pins. Project facts and
+hard rules live in [AGENTS.md](AGENTS.md); design rationale lives in [APPENDIX.md](APPENDIX.md).
 
 Two habits cut across everything:
 
@@ -14,8 +14,8 @@ Two habits cut across everything:
 
 ## Dockerfiles
 
-- Group layers with `# --- Section ---` banners and a top-of-file comment naming them (see
-  `images/android-sdk/Dockerfile`).
+- Group layers with `# --- Section ---` banners (one `RUN` per logical stage, `&&`-chained)
+  and a top-of-file comment naming them (see `images/android-sdk/Dockerfile`).
 - Pin every upstream `FROM` as `tag@sha256:<digest>`: the tag is the readable version, the
   digest makes the build reproducible. The one exception is our own rolling base, `flutter`
   FROM `android-sdk:latest` (DL3007 is ignored for it on purpose).
@@ -36,7 +36,7 @@ Two habits cut across everything:
   it does and any non-obvious gating.
 - Pin actions by **full commit SHA + a trailing `# vN` comment**
   (`actions/checkout@<sha> # v7`). The SHA is what runs; the comment is what humans and
-  Renovate read. Never a bare `@v7`.
+  Renovate read. Never a bare `@v7` (`config:best-practices` enforces the SHA pin).
 - Minimal `permissions:` per job: `contents: read`, plus `packages: write` only where it
   pushes.
 - Feed shell from an `env:` block; don't interpolate `${{ ... }}` straight into `run:`. It
@@ -57,15 +57,29 @@ Two habits cut across everything:
 - Factor repeated output into small named helpers (`section`/`ok`/`bad`/`skip`) and gate
   colour on a TTY (`[ -t 1 ]`) so CI logs stay plain.
 - On a missing tool, fail with what's missing and how to get it, not a bare non-zero.
+- Keep it shellcheck-clean. A genuine false positive (e.g. a `$VAR` meant for a container's
+  shell, not this one) gets a one-line `# shellcheck disable=SCxxxx` with a why, never a
+  blanket mute.
 
 ## Version pins (single source of truth)
 
+A Renovate-managed version lives in exactly one place: the pin it manages. Don't copy that
+number into prose, comments, `LABEL`s, the README, or tables; the copy goes stale on the next
+bump and the two silently disagree.
+
 - `FLUTTER_VERSION` and `DOCKER_TAG` live only in `versions.env`; the workflow `source`s it
-  and passes `flutter_version` in as a build arg. Don't restate the version anywhere else.
+  and passes `flutter_version` in as a build arg.
+- The `ubuntu` base version belongs only in the digest-pinned `FROM` in
+  `images/android-sdk/Dockerfile`. Everywhere else (comments, `LABEL`s, the README) write
+  `ubuntu` with no version.
 - Renovate owns the bumps (`.github/renovate.jsonc`). `config:best-practices` auto-tracks the
-  `FROM` digests and action SHAs; a custom manager handles the rest (the Flutter pin in
-  `versions.env`, the Linterpol lint image), which each need a
-  `# renovate: datasource=... depName=...` line directly above the pin.
+  `FROM` digests and action SHAs; a custom manager handles the rest (the Flutter pin, the
+  Linterpol lint image), which each need a `# renovate: datasource=... depName=...` line
+  directly above the pin.
 - Don't hand-edit a tracked pin (`versions.env`'s `FLUTTER_VERSION` included) unless the user
   asks; that's Renovate's job. Any pin you do touch, verify against the upstream registry,
   never from memory.
+
+> **Why:** Renovate rewrites the pin it manages, never the free text around it. A 24.04 → 26.04
+> base bump left the `FROM` correct while a `LABEL`, the README, and a doc comment still said
+> 24.04. Keeping the number in one managed place keeps it authoritative.
