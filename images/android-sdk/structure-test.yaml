@@ -30,3 +30,9 @@ commandTests:
     command: sdkmanager
     args: ['--version']
     exitCode: 0
+  # Arch-agnostic: checks the runtime $JAVA_HOME resolves to a working JDK (javac), so it
+  # holds on both amd64 and arm64 without hardcoding the arch-specific path.
+  - name: JAVA_HOME points to a working JDK
+    command: sh
+    args: ['-c', 'test -n "$JAVA_HOME" && "$JAVA_HOME/bin/javac" -version']
+    exitCode: 0

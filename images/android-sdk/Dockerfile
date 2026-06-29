@@ -35,6 +35,13 @@ RUN apt-get update \
     && apt-get install -y jq lcov --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
+# JAVA_HOME for the JDK installed above. TARGETARCH (amd64/arm64) is set by Buildx and
+# matches Ubuntu's /usr/lib/jvm/java-21-openjdk-<arch> layout; the "21" mirrors the
+# openjdk-21-jdk pin above. Tools that read JAVA_HOME (Gradle, flutter doctor) then resolve
+# the JDK deterministically instead of guessing via PATH.
+ARG TARGETARCH
+ENV JAVA_HOME=/usr/lib/jvm/java-21-openjdk-${TARGETARCH}
+
 # --- Build toolchain: locale -----------------------------------------------
 RUN echo "en_US.UTF-8 UTF-8" > /etc/locale.gen \
     && locale-gen \
