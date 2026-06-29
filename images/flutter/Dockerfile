@@ -13,6 +13,14 @@ ENV FLUTTER_ROOT=$FLUTTER_HOME
 
 ENV PATH=${PATH}:${FLUTTER_HOME}/bin:${FLUTTER_HOME}/bin/cache/dart-sdk/bin
 
+# Quiet CI defaults (override with `-e BOT=false`): FLUTTER_SUPPRESS_ANALYTICS no-ops Flutter analytics; BOT=true trips flutter+dart bot detection,
+# which no-ops Dart analytics and skips Flutter's version-freshness check.
+# Rationale, including why not CI=true: ../../APPENDIX.md#quiet-ci-defaults
+# BOT is an internal flutter_tools lever, not a documented one:
+# https://github.com/flutter/flutter/blob/stable/packages/flutter_tools/lib/src/base/bot_detector.dart
+ENV FLUTTER_SUPPRESS_ANALYTICS=true \
+    BOT=true
+
 RUN git clone --depth 1 --branch ${FLUTTER_VERSION} https://github.com/flutter/flutter.git ${FLUTTER_HOME}
 
 RUN yes | flutter doctor --android-licenses \
