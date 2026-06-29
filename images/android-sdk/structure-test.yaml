@@ -42,3 +42,10 @@ commandTests:
     command: sh
     args: ['-c', 'test -n "$JAVA_HOME" && "$JAVA_HOME/bin/javac" -version']
     exitCode: 0
+  # yq DX tool (downloaded static Go binary): proves it's on PATH and runs. exitCode-only and
+  # version-agnostic (Renovate bumps it); a wrong-arch binary wouldn't execute, so an exit 0
+  # here also confirms the amd64/arm64 download matched the image arch.
+  - name: yq is runnable (YAML DX tool)
+    command: yq
+    args: ['--version']
+    exitCode: 0
