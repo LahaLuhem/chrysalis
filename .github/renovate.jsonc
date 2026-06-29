@@ -44,6 +44,19 @@
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+LINTERPOL_IMAGE=\"\\$\\{LINTERPOL_IMAGE:-[^:\"]+:(?<currentValue>[^@\"]+)@(?<currentDigest>sha256:[0-9a-f]+)\\}\"",
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+LINTERPOL_IMAGE:\\s*[^:\\s]+:(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[0-9a-f]+)"
       ]
+    },
+    {
+      "description": "Track the global Dart DX CLIs (cider, dependency_validator) pinned on the `dart pub global activate` lines in the flutter Dockerfile. datasource=dart is pub.dev; semver versioning.",
+      "customType": "regex",
+      "managerFilePatterns": ["/^images/flutter/Dockerfile$/"],
+      // depName + currentValue are read off each `activate <pkg> <version>` line; datasource and
+      // versioning are fixed here rather than via an inline `# renovate: …` marker, because a comment
+      // between the two chained activate RUNs would trip hadolint DL3059 (consecutive-RUN consolidation).
+      "matchStrings": [
+        "dart pub global activate (?<depName>[a-z0-9_]+) (?<currentValue>\\d+\\.\\d+\\.\\d+)"
+      ],
+      "datasourceTemplate": "dart",
+      "versioningTemplate": "semver"
     }
   ]
 }
