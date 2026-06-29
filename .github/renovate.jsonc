@@ -57,6 +57,16 @@
       ],
       "datasourceTemplate": "dart",
       "versioningTemplate": "semver"
+    },
+    {
+      "description": "Track yq (mikefarah/yq) pinned as YQ_VERSION in the android-sdk Dockerfile (github-releases).",
+      "customType": "regex",
+      "managerFilePatterns": ["/^images/android-sdk/Dockerfile$/"],
+      // datasource + depName come from the `# renovate:` marker, currentValue from ENV YQ_VERSION.
+      // It's an ENV pin (not a comment wedged between RUNs), so the inline-marker convention fits.
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+ENV YQ_VERSION=(?<currentValue>\\S+)"
+      ]
     }
   ]
 }
