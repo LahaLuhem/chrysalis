@@ -62,7 +62,7 @@ Here's each layer, and why it's there:
 | --- | --- | --- |
 | **Base** | the OS | `ubuntu` |
 | **Build toolchain** | build an Android app with Flutter | the JDK, the Android SDK (cmdline-tools, platform-tools, build-tools, a platform), `git`, `zip`/`unzip`, `curl`/`wget`, `build-essential`, `libstdc++6`, `locales` |
-| **Convenience (DX)** | handy, but not needed to build | `lcov` (for `flutter test --coverage` reports), `jq`, plus the Dart CLIs `cider` and `dependency_validator` (see below) |
+| **Convenience (DX)** | handy, but not needed to build | `lcov` (for `flutter test --coverage` reports), `jq` and `yq` (JSON and YAML), plus the Dart CLIs `cider` and `dependency_validator` (see below) |
 | **Flutter** | run `flutter`/`dart`, build apps | Flutter cloned at the pinned version plus its bundled Dart SDK. This is the `flutter` image, built `FROM` `android-sdk`. |
 
 > **By architecture:** `flutter`, `dart`, and the JVM tooling run natively on both
