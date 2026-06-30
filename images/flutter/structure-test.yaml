@@ -49,4 +49,4 @@ metadataTest:
     - key: CH_BUILD_DART_DEFINE_FILE
       value: "lib/env/dart_defines.env"
     - key: CH_BUILD_CACHE_KEYSTORE
-      value: "android/app/ch-signing.jks"
+      value: "android/app/ch-signing.p12"
