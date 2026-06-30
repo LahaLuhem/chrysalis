@@ -31,16 +31,14 @@ die() { printf 'ch-build-setup-android: error: %s\n' "$1" >&2; exit 1; }
 # outside the image. CH_BUILD_DART_DEFINE_FILE is what you pass to --dart-define-from-file;
 # CH_BUILD_CACHE_KEYSTORE is the path to add to your build cache for a stable signing key.
 readonly VAR_REGISTRY='
-CH_BUILD_ANDROID_STORE_PASSWORD|storepassword|Keystore password, also written to key.properties
-CH_BUILD_ANDROID_KEY_PASSWORD||Key password (empty mirrors the store password)
+CH_BUILD_ANDROID_KEYSTORE_PASSWORD|storepassword|PKCS12 keystore password (used for both the store and the key)
 CH_BUILD_ANDROID_KEY_ALIAS|development|Signing key alias
 CH_BUILD_ANDROID_DNAME|CN=Chrysalis Build Setup, O=Chrysalis, C=US|Distinguished name for the generated cert
 CH_BUILD_ANDROID_KEY_VALIDITY|10000|Generated cert validity in days
 CH_BUILD_ANDROID_KEY_SIZE|2048|Key size in bits
 CH_BUILD_ANDROID_KEY_ALG|RSA|Key algorithm
-CH_BUILD_ANDROID_STORE_TYPE|JKS|Keystore type
 CH_BUILD_DART_DEFINE_FILE|lib/env/dart_defines.env|Output path for --dart-define-from-file (baked image ENV)
-CH_BUILD_CACHE_KEYSTORE|android/app/ch-signing.jks|Keystore path; cache it for a stable signing key (baked image ENV)
+CH_BUILD_CACHE_KEYSTORE|android/app/ch-signing.p12|Keystore path; cache it for a stable signing key (baked image ENV)
 '
 
 declare -A DEF
@@ -144,37 +142,36 @@ setup_signing() {
     return 0
   fi
 
-  local keystore store_pass key_pass key_alias dname validity key_size key_alg store_type
+  local keystore pass key_alias dname validity key_size key_alg
   keystore="$(defaulted CH_BUILD_CACHE_KEYSTORE)"
-  store_pass="$(defaulted CH_BUILD_ANDROID_STORE_PASSWORD)"
-  key_pass="$(defaulted CH_BUILD_ANDROID_KEY_PASSWORD)"
-  [ -n "$key_pass" ] || key_pass="$store_pass"
+  pass="$(defaulted CH_BUILD_ANDROID_KEYSTORE_PASSWORD)"
   key_alias="$(defaulted CH_BUILD_ANDROID_KEY_ALIAS)"
   dname="$(defaulted CH_BUILD_ANDROID_DNAME)"
   validity="$(defaulted CH_BUILD_ANDROID_KEY_VALIDITY)"
   key_size="$(defaulted CH_BUILD_ANDROID_KEY_SIZE)"
   key_alg="$(defaulted CH_BUILD_ANDROID_KEY_ALG)"
-  store_type="$(defaulted CH_BUILD_ANDROID_STORE_TYPE)"
 
   if [ -f "$keystore" ]; then
     log "reusing existing keystore $keystore"
   elif [ "$dry_run" -ne 0 ]; then
-    log "[dry-run] would generate keystore $keystore (alias $key_alias, $key_alg/$key_size, $store_type)"
+    log "[dry-run] would generate PKCS12 keystore $keystore (alias $key_alias, $key_alg/$key_size)"
   else
     command -v keytool >/dev/null 2>&1 || die "keytool not found (it ships with the JDK in the chrysalis image)"
     mkdir -p "$(dirname "$keystore")"
     log "generating dev keystore $keystore (alias $key_alias)"
-    keytool -genkeypair -keystore "$keystore" -storetype "$store_type" \
+    # PKCS12 is the only supported type (JKS is deprecated). PKCS12 uses one password for the
+    # store and the key, so a single CH_BUILD_ANDROID_KEYSTORE_PASSWORD drives both.
+    keytool -genkeypair -keystore "$keystore" -storetype PKCS12 \
       -keyalg "$key_alg" -keysize "$key_size" -validity "$validity" \
       -alias "$key_alias" -dname "$dname" \
-      -storepass "$store_pass" -keypass "$key_pass" >/dev/null
+      -storepass "$pass" -keypass "$pass" >/dev/null
     chmod 600 "$keystore"
   fi
 
   # key.properties' storeFile resolves relative to android/app/, so the basename is enough.
   write_file android/key.properties "$dry_run" <<PROPS
-storePassword=$store_pass
-keyPassword=$key_pass
+storePassword=$pass
+keyPassword=$pass
 keyAlias=$key_alias
 storeFile=$(basename "$keystore")
 PROPS

@@ -72,4 +72,4 @@ COPY --chmod=0755 scripts/ /usr/local/bin/
 # add to a build cache for a stable signing key. Inert (no other tool reads them), so this keeps
 # to the portable-image rule. See ../../APPENDIX.md#build-setup-android.
 ENV CH_BUILD_DART_DEFINE_FILE=lib/env/dart_defines.env \
-    CH_BUILD_CACHE_KEYSTORE=android/app/ch-signing.jks
+    CH_BUILD_CACHE_KEYSTORE=android/app/ch-signing.p12
