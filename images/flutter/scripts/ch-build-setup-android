@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# ch-build-setup-android — prepare the working tree for `flutter build apk|aab`.
+# ch-build-setup-android: prepare the working tree for `flutter build apk|aab`.
 #
 # An inert, vendor-agnostic helper baked into the chrysalis `flutter` image. It does nothing
 # until you invoke it (so non-build jobs pay no cost), reads only CH_BUILD_* environment
@@ -65,7 +65,7 @@ write_file() {
 
 print_help() {
   cat <<'EOF'
-ch-build-setup-android — prepare the working tree for `flutter build apk|aab`.
+ch-build-setup-android: prepare the working tree for `flutter build apk|aab`.
 
 Reads CH_BUILD_* environment variables and writes only what is set. Run from the Flutter
 project root. An existing android/key.properties is never overwritten.

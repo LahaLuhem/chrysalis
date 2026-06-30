@@ -24,6 +24,7 @@ run anywhere: any CI, any container runtime.
 - [Images](#images)
 - [Quick start](#quick-start)
 - [What's in the image](#whats-in-the-image)
+- [Preparing an Android build](#preparing-an-android-build)
 - [Architecture support](#architecture-support)
 - [Staying current](#staying-current)
 
@@ -97,6 +98,66 @@ docker run --rm -v ${PWD}:/build -w /build ghcr.io/lahaluhem/flutter:stable cide
 ```
 
 Versions track pub.dev through Renovate, like everything else here.
+
+</details>
+
+## Preparing an Android build
+
+A `flutter build apk` / `appbundle` usually needs a few secret files staged first: a
+`--dart-define-from-file` file, `android/app/google-services.json`, and a signing keystore with
+`android/key.properties`. Rather than hand-writing that in every CI job, the image ships
+**`ch-build-setup-android`**, an opt-in helper that materialises them from `CH_BUILD_*`
+environment variables. Call it once before your build; it does nothing until you do, so non-build
+jobs pay nothing.
+
+```bash
+# in your build job, before `flutter build`:
+ch-build-setup-android
+flutter build apk --release --dart-define-from-file="$CH_BUILD_DART_DEFINE_FILE"
+```
+
+`ch-build-setup-android --help` lists every variable; `--dry-run` shows what it would write
+without writing anything.
+
+### What it reads
+
+| Variable | What it does |
+| --- | --- |
+| `CH_BUILD_DEFINE_<KEY>` | one per dart-define, written verbatim as `<KEY>=<value>`; set as many as you need |
+| `CH_BUILD_ANDROID_GOOGLE_SERVICES` | the full `google-services.json` content, written to `android/app/google-services.json` |
+| `CH_BUILD_ANDROID_KEYSTORE_PASSWORD` | PKCS12 keystore password (default `storepassword`) |
+| `CH_BUILD_ANDROID_KEY_ALIAS` | signing key alias (default `development`) |
+| `CH_BUILD_ANDROID_DNAME`, `_KEY_VALIDITY`, `_KEY_SIZE`, `_KEY_ALG` | `keytool` knobs, all sensibly defaulted |
+
+Two paths are baked into the image as environment variables, so you reference them instead of
+hardcoding a location:
+
+| Variable | Default | Use it for |
+| --- | --- | --- |
+| `CH_BUILD_DART_DEFINE_FILE` | `lib/env/dart_defines.env` | pass to `--dart-define-from-file` |
+| `CH_BUILD_CACHE_KEYSTORE` | `android/app/ch-signing.p12` | add to your build job's cache to keep one signing key across runs |
+
+### Signing
+
+The helper generates a PKCS12 dev keystore and writes the `key.properties` that your
+`android/app/build.gradle` reads (you still need the [standard signing
+config](https://docs.flutter.dev/deployment/android#sign-the-app) wired into your project). It
+only generates when the keystore is missing, so caching `CH_BUILD_CACHE_KEYSTORE` keeps the key
+stable; otherwise each run mints a fresh one and installed builds can't update in place.
+
+<details>
+<summary>Things to watch out for</summary>
+
+- **Run it from your project root** (it looks for `pubspec.yaml`).
+- **dart-define values are written verbatim.** Quote a value that contains a `#` or has leading or
+  trailing spaces; multi-line values aren't supported by `--dart-define-from-file`.
+- **An existing `android/key.properties` is left untouched**, so your own signing setup wins.
+- **Changing the password invalidates a cached keystore.** Clear the cache when you rotate it; the
+  old keystore won't open with the new password.
+- **The files it writes contain secrets** (mode `0600`). On a reused/persistent runner, clean them
+  up after the build.
+- **Release builds on arm64 need x86 emulation**, like any Android build here (see
+  [Architecture support](#architecture-support)).
 
 </details>
 
