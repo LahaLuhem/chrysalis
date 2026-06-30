@@ -38,4 +38,4 @@ jobs:
           packages: flutter,android-sdk
           keep-n-untagged: 10
           older-than: "30 days"
-          dry-run: true
+          dry-run: false
