@@ -241,3 +241,32 @@ verified. A present manifest is not a verified build.
   so baking it would force everything a consumer runs in the container into CI mode, a runtime
   assumption the portable-image rule avoids. Real CI sets `CI` itself anyway, so baking it would
   only surprise local `docker run`. `BOT` is the surgical pick.
+
+---
+
+<a id="dx-tools-native"></a>
+## DX CLIs are compiled to native binaries, not `pub global activate`
+
+- **Decision:** the two Flutter DX tools (`cider`, `dependency_validator`) are compiled to
+  self-contained native executables with `dart compile exe` into `/usr/local/bin`, rather than
+  installed with `dart pub global activate`.
+- **Why:** `pub global activate` doesn't leave a portable binary, it leaves a precompiled snapshot
+  keyed to the exact SDK version (the file is literally named
+  `…/global_packages/cider/bin/cider.dart-<sdk>.snapshot`). That snapshot lives in `PUB_CACHE`, and
+  in CI `PUB_CACHE` is often a shared or persisted cache (a runner-level volume mounted across jobs).
+  The moment the SDK and that cache drift apart, the tool breaks with an SDK-mismatch error and stays
+  broken until it's re-activated. Two ways they drift: the host SDK is upgraded under a persisted
+  cache, or a `pub-cache` volume seeded once from an image outlives a rebuild of that image on a
+  newer Flutter (the volume keeps the old snapshot and shadows the image's fresh one). A native
+  binary in `/usr/local/bin` neither lives in nor reads `PUB_CACHE`, so it survives SDK upgrades and
+  can't be shadowed by a pub-cache volume.
+- **How it's built:** activate each tool (only to resolve, download, and generate a
+  `package_config.json`), `dart compile exe` the resolved `bin/<exe>.dart` against that config, then
+  `pub global deactivate` and drop `global_packages` / `bin` / `hosted` so no snapshot or source
+  ships in the image. The image is built natively per arch, so each arch gets its own ELF.
+- **Trade-offs:** about 15 MB for the two self-contained binaries, and `dart pub global run` is no
+  longer wired up for them (unused here). Versions stay pinned and Renovate-bumped via the `dart`
+  datasource, now as `# renovate:`-marked `ENV …_VERSION` lines (the same shape as `YQ_VERSION` in
+  the android-sdk image), since the old custom manager keyed off the `activate` lines that are gone.
+- **Scope note:** these are pure-Dart tools, so this is arch-agnostic and unrelated to the arm64
+  Android-build limitation ([#arm64-android-build-limitation](#arm64-android-build-limitation)).

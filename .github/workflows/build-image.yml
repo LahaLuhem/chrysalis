@@ -83,7 +83,7 @@ jobs:
         env:
           IMG: ${{ inputs.name }}
           # renovate: datasource=docker depName=ghcr.io/lahaluhem/linterpol
-          LINTERPOL_IMAGE: ghcr.io/lahaluhem/linterpol:latest@sha256:adf0fc75f908d3dfd4956eb3b5515b5fc15f43c58fc34387b094a9e05c886ee8
+          LINTERPOL_IMAGE: ghcr.io/lahaluhem/linterpol:latest@sha256:0c7b9fd505693f47346e1218d58ae87a2ee19c38dc56e0f7333af7914b63e9b3
         run: |
           # container-structure-test from the pinned Linterpol image (same image as scripts/test.sh).
           # The image-under-test was loaded into the runner's daemon by "Build for test (load)";
