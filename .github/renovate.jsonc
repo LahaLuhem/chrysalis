@@ -12,11 +12,20 @@
   // action SHAs), dockerfile (FROM lines in images/*/Dockerfile).
   "enabledManagers": ["custom.regex", "github-actions", "dockerfile"],
 
+  // Label every dependency PR; the dev-dependencies rule below overrides this for CI tooling.
+  "labels": ["dependencies"],
+
   "packageRules": [
     {
       "description": "android-sdk:latest is rebuilt and republished every run (flutter FROMs it); it must float, so never digest-pin it.",
       "matchPackageNames": ["ghcr.io/lahaluhem/android-sdk"],
       "pinDigests": false
+    },
+    {
+      "description": "CI lint/test tooling is a dev-dependency (like Dart's dev_dependencies / npm's devDependencies): label and scope its PRs distinctly. depType `dev` is set by the lint-tools.env custom manager below.",
+      "matchDepTypes": ["dev"],
+      "labels": ["dev-dependencies"],
+      "semanticCommitScope": "deps-dev"
     }
   ],
 
@@ -32,18 +41,14 @@
       ]
     },
     {
-      "description": "Track the linterpol lint image (pinned by digest) in scripts/test.sh and the build-image.yml CI workflow.",
+      "description": "Track the Linterpol CI lint/test image (a dev-dependency: provides hadolint/actionlint/shellcheck/biome + container-structure-test, not shipped in the published images). Single source: .github/lint-tools.env, read by scripts/test.sh and the build-image.yml structure-test step. depType `dev` drives the dev-dependencies label/scope (packageRules above).",
       "customType": "regex",
-      "managerFilePatterns": ["/^scripts/test\\.sh$/", "/^\\.github/workflows/build-image\\.yml$/"],
-      // Both files pin the same image as tag@digest under a `# renovate:` marker, in two forms;
-      // Renovate bumps the digest in both (same depName) together. Each matchString captures
-      // datasource + depName (from the marker), currentValue (the tag) and currentDigest (sha256).
-      //   1) test.sh         shell default:  LINTERPOL_IMAGE="${LINTERPOL_IMAGE:-<ref>}"
-      //   2) build-image.yml  workflow env:  LINTERPOL_IMAGE: <ref>
+      "managerFilePatterns": ["/^\\.github/lint-tools\\.env$/"],
+      // datasource + depName from the `# renovate:` marker; currentValue is the tag, currentDigest the sha256.
       "matchStrings": [
-        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+LINTERPOL_IMAGE=\"\\$\\{LINTERPOL_IMAGE:-[^:\"]+:(?<currentValue>[^@\"]+)@(?<currentDigest>sha256:[0-9a-f]+)\\}\"",
-        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+LINTERPOL_IMAGE:\\s*[^:\\s]+:(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[0-9a-f]+)"
-      ]
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+LINTERPOL_IMAGE=[^:\\s]+:(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[0-9a-f]+)"
+      ],
+      "depTypeTemplate": "dev"
     },
     {
       "description": "Track the Dart DX CLIs (cider, dependency_validator) pinned as ENV <NAME>_VERSION in the flutter Dockerfile, each under a `# renovate:` marker. They're compiled with `dart compile exe` (not `pub global activate`); the pins are plain ENV lines, so the inline-marker convention fits (same shape as YQ_VERSION below). datasource=dart is pub.dev.",

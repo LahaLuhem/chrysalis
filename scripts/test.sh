@@ -43,9 +43,9 @@ need() {
 # don't have to be installed on the host and every run (local or CI) uses the same pinned
 # versions. The repo is mounted read-only at /work, so the repo-relative paths callers pass
 # resolve there. Override the image with LINTERPOL_IMAGE (e.g. a locally-built linterpol:local
-# when developing Linterpol itself). Pinned by digest; Renovate bumps it (.github/renovate.jsonc).
-# renovate: datasource=docker depName=ghcr.io/lahaluhem/linterpol
-LINTERPOL_IMAGE="${LINTERPOL_IMAGE:-ghcr.io/lahaluhem/linterpol:latest@sha256:0c7b9fd505693f47346e1218d58ae87a2ee19c38dc56e0f7333af7914b63e9b3}"
+# when developing Linterpol itself). Pinned by digest in .github/lint-tools.env (single source,
+# shared with the build-image.yml structure-test step; Renovate bumps it there).
+LINTERPOL_IMAGE="${LINTERPOL_IMAGE:-$(grep -E '^LINTERPOL_IMAGE=' .github/lint-tools.env | cut -d= -f2-)}"
 linterpol_ready=''
 
 # Make sure LINTERPOL_IMAGE is present locally, pulling it on demand (the default is a public ghcr ref).
