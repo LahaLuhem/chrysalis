@@ -8,7 +8,8 @@ Claude-Code-specific guidance. Project facts, stack, repo layout, and hard rules
 
 You're assisting with **chrysalis**: a repo whose only job is to **build and publish**
 multi-arch (`amd64` + `arm64`) Flutter + Android-SDK Docker images to `ghcr.io/lahaluhem`,
-tracking the latest stable Flutter. *How or where the images are consumed is out of scope.*
+tracking the latest stable Flutter. *How or where the images are consumed is out of scope,
+beyond inert, opt-in build-env helpers shipped on `PATH` (see AGENTS.md).*
 Treat the user as technical and direct. Published images are outward-facing — a bad or
 mistagged push is visible to anyone who pulls — so publishing is a confirm-first action.
 

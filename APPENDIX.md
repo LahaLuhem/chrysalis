@@ -8,6 +8,8 @@
 - [Publishing is gated to `master` and manual dispatch](#publish-gating)
 - [Version tracking via Renovate, not a bespoke cron](#renovate-version-tracking)
 - [Quiet-by-default: telemetry off, version check skipped](#quiet-ci-defaults)
+- [DX CLIs are compiled to native binaries, not `pub global activate`](#dx-tools-native)
+- [Build-env setup helper: `ch-build-setup-android`](#build-setup-android)
 
 <!-- TOC end -->
 
@@ -337,3 +339,52 @@ verified. A present manifest is not a verified build.
   the android-sdk image), since the old custom manager keyed off the `activate` lines that are gone.
 - **Scope note:** these are pure-Dart tools, so this is arch-agnostic and unrelated to the arm64
   Android-build limitation ([#arm64-android-build-limitation](#arm64-android-build-limitation)).
+
+---
+
+<a id="build-setup-android"></a>
+## Build-env setup helper: `ch-build-setup-android`
+
+- **Decision:** the `flutter` image ships an inert helper on `PATH`, `ch-build-setup-android`,
+  that materialises the files an Android `flutter build apk|aab` expects, a
+  `--dart-define-from-file` file, `android/app/google-services.json`, and dev signing (a keystore
+  plus `android/key.properties`), from namespaced `CH_BUILD_*` env vars. It is called explicitly
+  in a build job and does nothing on its own. (Implementation lands in follow-up steps; this
+  records the agreed design.)
+- **Why it counts as in scope, though it looks like consumer logic:** the portable-image rule
+  ([#quiet-ci-defaults](#quiet-ci-defaults)) forbids *runtime assumptions*, things that change
+  behaviour for every command by default (why `CI=true` was rejected). It does not forbid inert
+  tools you opt into by name. This helper is the same shape as the DX CLIs already baked in
+  ([#dx-tools-native](#dx-tools-native)): on `PATH`, no effect until called, no CI system assumed
+  (it reads only env vars, which every CI provides). So it sits with `cider`, not with `CI=true`.
+  The worry about wasted file I/O on non-build jobs is moot for free: those jobs never call it.
+- **dart-defines need no invented format, and the file carries no "type".** Traced through stable
+  `flutter_tools` (`flutter_command.dart`): `--dart-define-from-file` content-sniffs JSON vs
+  `.env` by a leading `{`; the `.env` branch builds a `Map<String,String>` while the JSON branch
+  keeps typed values, but both are emitted as defines via `'$key=$value'` (`.toString()`). So
+  `.env` `DEBUG=true` and JSON `{"DEBUG":true}` yield the *identical* define `DEBUG=true`; the
+  Dart type is chosen at the read site (`String`/`bool`/`int.fromEnvironment`), not in the file.
+  So the helper writes plain per-key `KEY=value` lines verbatim. The user quotes values that need
+  it (flutter strips wrapping quotes, treats an unquoted trailing `#` as a comment, and rejects
+  multi-line values). No delimiter to invent, no JSON to assemble, and no base64 by default
+  (base64 was only a CI-specific escaping workaround, not part of the general mechanism).
+- **Keystore is generate-if-absent, with its path exposed for caching.** `keytool` mints a fresh
+  random keypair on every run, so regenerating the keystore each job gives an *unstable* signing
+  key no matter the password. The helper writes the keystore only when it is missing and publishes
+  its path, so a build job can cache it and keep the signing key stable across runs. A stable key
+  on clean runners still needs a user-provided keystore (a possible later mode). The default
+  password is a get-going convenience, not a stability lever.
+- **Why `CH_BUILD_CACHE_*` names the keystore path.** That file is invisible to the user except as
+  something to cache, so it is named for that purpose, not as an internal output path. The prefix
+  is forward-looking: other cacheable locations (Gradle home, the pub cache) can join it. The
+  build-command path is a separate var (`CH_BUILD_DART_DEFINE_FILE`) because its purpose is to be
+  passed to `--dart-define-from-file`. Both are baked as *relative* image `ENV`s: a child process
+  cannot export into the parent job shell, but a constant path can be baked once and referenced by
+  both the helper and the user.
+- **No direnv; a single in-script var registry instead.** The `CH_BUILD_*` surface will grow, but
+  direnv (`.envrc`) is a per-directory env *loader* for interactive shells. It mismatches CI and
+  `docker run` sourcing (vars arrive from the secret store or `--env-file`, non-interactively) and,
+  more to the point, manages no defaults or schema. Growth is a *registry* problem, so the
+  defaults, `--help`, and the README var table all derive from one in-script source of truth. That
+  stays pure shell with no new image dependency (no direnv, no YAML parser); `docker run
+  --env-file` covers local multi-var runs natively.
