@@ -53,6 +53,8 @@ jobs:
       name: android-sdk
       context: images/android-sdk
       tags: latest
+      title: Android SDK
+      description: Android SDK (cmdline-tools, platform-tools, build-tools, a platform) on Ubuntu
       push: ${{ needs.prepare.outputs.push == 'true' }}
 
   # flutter is built FROM the android-sdk manifest list, so it only runs on
@@ -71,6 +73,8 @@ jobs:
       tags: |
         ${{ needs.prepare.outputs.flutter_version }}
         ${{ needs.prepare.outputs.docker_tag }}
+      title: Flutter
+      description: Flutter on the chrysalis android-sdk base image
       build-args: |
         flutter_version=${{ needs.prepare.outputs.flutter_version }}
       push: ${{ needs.prepare.outputs.push == 'true' }}
