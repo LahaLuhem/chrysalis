@@ -19,6 +19,14 @@ on:
         description: Newline-separated tags to publish onto the manifest list.
         required: true
         type: string
+      title:
+        description: OCI image title (org.opencontainers.image.title), e.g. "Flutter".
+        required: true
+        type: string
+      description:
+        description: OCI image description (org.opencontainers.image.description).
+        required: true
+        type: string
       build-args:
         description: Newline-separated build args passed to the build.
         required: false
@@ -95,7 +103,62 @@ jobs:
             "$LINTERPOL_IMAGE" \
             container-structure-test test --image "$IMG:test" --config "images/$IMG/structure-test.yaml"
 
-      # Push by digest, reusing the cached layers from the test build above.
+      # Build the image to an OCI image layout (single-arch, amd64) and assert it uses OCI media
+      # types throughout. Catches an oci-mediatypes / metadata regression at PR time, before the
+      # publish-time assert_oci_registry.sh. Only on non-publish runs and the amd64 leg: a --load
+      # image can't carry OCI media types, so this is a separate type=oci export; on publish runs
+      # the registry assert covers it; and flutter never builds on PRs, so in practice this guards
+      # android-sdk. Reuses the cached layers from "Build for test (load)".
+      - name: Build OCI layout (amd64, PR-time validation)
+        if: matrix.platform == 'linux/amd64' && !inputs.push
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7
+        with:
+          context: ${{ inputs.context }}
+          platforms: linux/amd64
+          provenance: false
+          build-args: ${{ inputs.build-args }}
+          outputs: type=oci,oci-mediatypes=true,tar=false,dest=${{ runner.temp }}/oci-${{ inputs.name }}
+          cache-from: type=gha,scope=${{ inputs.name }}-${{ env.PLATFORM_PAIR }}
+
+      - name: Assert OCI layout media types
+        if: matrix.platform == 'linux/amd64' && !inputs.push
+        run: ./scripts/assert_oci_layout.sh "${{ runner.temp }}/oci-${{ inputs.name }}"
+
+      # Generate OCI labels (image config) + manifest-level annotations from the build context.
+      # title/description are per-image inputs; source/revision/created/version/licenses fill in
+      # from the repo and the build commit. The Dockerfiles carry no LABELs; this is the single
+      # source. tags are fed only so org.opencontainers.image.version reflects the primary tag;
+      # the merge step does the actual tagging from inputs.tags.
+      - name: Compose image tag specs for metadata
+        id: tagspecs
+        if: inputs.push
+        env:
+          TAGS: ${{ inputs.tags }}
+        run: |
+          {
+            echo 'specs<<EOF'
+            while IFS= read -r t; do
+              [ -n "$t" ] && echo "type=raw,value=$t"
+            done <<< "$TAGS"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Docker metadata (labels + manifest annotations)
+        id: meta
+        if: inputs.push
+        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ inputs.name }}
+          tags: ${{ steps.tagspecs.outputs.specs }}
+          labels: |
+            org.opencontainers.image.title=${{ inputs.title }}
+            org.opencontainers.image.description=${{ inputs.description }}
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest
+
+      # Push by digest, reusing the cached layers from the test build above. oci-mediatypes=true
+      # makes the pushed manifest, config, and layers use OCI media types; labels + manifest
+      # annotations come from metadata-action (the Dockerfiles carry none).
       - name: Build and push by digest
         id: build
         if: inputs.push
@@ -105,7 +168,9 @@ jobs:
           platforms: ${{ matrix.platform }}
           provenance: false
           build-args: ${{ inputs.build-args }}
-          outputs: type=image,name=${{ env.REGISTRY }}/${{ inputs.name }},push-by-digest=true,name-canonical=true,push=true
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ inputs.name }},push-by-digest=true,name-canonical=true,push=true,oci-mediatypes=true
           cache-from: type=gha,scope=${{ inputs.name }}-${{ env.PLATFORM_PAIR }}
 
       - name: Export digest
@@ -132,6 +197,9 @@ jobs:
       contents: read
       packages: write
     steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
       - name: Download digests
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
@@ -149,20 +217,55 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Index-level OCI annotations for the manifest list (the consumer-visible set). Same metadata
+      # source as the per-arch build, but annotations level = index here. tags feed only the version
+      # field; actual tagging is done below from inputs.tags.
+      - name: Compose image tag specs for metadata
+        id: tagspecs
+        env:
+          TAGS: ${{ inputs.tags }}
+        run: |
+          {
+            echo 'specs<<EOF'
+            while IFS= read -r t; do
+              [ -n "$t" ] && echo "type=raw,value=$t"
+            done <<< "$TAGS"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Docker metadata (index annotations)
+        id: meta
+        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ inputs.name }}
+          tags: ${{ steps.tagspecs.outputs.specs }}
+          labels: |
+            org.opencontainers.image.title=${{ inputs.title }}
+            org.opencontainers.image.description=${{ inputs.description }}
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: index
+
       - name: Create manifest list and push
         shell: bash
         working-directory: ${{ runner.temp }}/digests
         env:
           IMAGE: ${{ env.REGISTRY }}/${{ inputs.name }}
           TAGS: ${{ inputs.tags }}
+          ANNOTATIONS: ${{ steps.meta.outputs.annotations }}
         run: |
           tag_args=()
           while IFS= read -r tag; do
             [ -n "$tag" ] && tag_args+=(-t "$IMAGE:$tag")
           done <<< "$TAGS"
+          # Index-level OCI annotations from metadata-action, one "index:KEY=VALUE" per line;
+          # imagetools create applies them to the manifest list (index) it builds.
+          annotation_args=()
+          while IFS= read -r ann; do
+            [ -n "$ann" ] && annotation_args+=(--annotation "$ann")
+          done <<< "$ANNOTATIONS"
           sources=()
           for digest in *; do sources+=("$IMAGE@sha256:$digest"); done
-          docker buildx imagetools create "${tag_args[@]}" "${sources[@]}"
+          docker buildx imagetools create "${tag_args[@]}" "${annotation_args[@]}" "${sources[@]}"
 
       - name: Inspect
         shell: bash
@@ -172,3 +275,19 @@ jobs:
         run: |
           first_tag="$(grep -m1 . <<< "$TAGS")"
           docker buildx imagetools inspect "$IMAGE:$first_tag"
+
+      - name: Install crane
+        uses: imjasonh/setup-crane@feee3b6bb0d4c68370f256a4502498c9227e5c6b # v0.7
+
+      # A publish is only "done" when the pushed image carries both arches (hard rule 8) and uses
+      # OCI media types end to end. assert_oci_registry.sh checks the index, both arches, and every
+      # manifest/config/layer; crane then validates the image is well-formed and pullable.
+      - name: Verify the published image (OCI media types + crane validate)
+        shell: bash
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ inputs.name }}
+          TAGS: ${{ inputs.tags }}
+        run: |
+          first_tag="$(grep -m1 . <<< "$TAGS")"
+          ./scripts/assert_oci_registry.sh "$IMAGE:$first_tag"
+          crane validate --remote "$IMAGE:$first_tag"
