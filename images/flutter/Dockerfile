@@ -1,8 +1,7 @@
 FROM ghcr.io/lahaluhem/android-sdk:latest
 
-LABEL org.opencontainers.image.source=https://github.com/LahaLuhem/chrysalis \
-      org.opencontainers.image.description="Flutter on the chrysalis android-sdk base image"
-
+# OCI labels + annotations are workflow-owned (docker/metadata-action in build-image.yml),
+# not baked here. See APPENDIX.md#oci-native-images.
 USER root
 
 ARG flutter_version

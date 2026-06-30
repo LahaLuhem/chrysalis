@@ -9,9 +9,8 @@
 # The flutter image adds the Flutter layer on top.
 FROM ubuntu:26.04@sha256:53958ec7b67c2c9355df922dd08dbf0360611f8c3cdb656875e81873db9ffdba
 
-LABEL org.opencontainers.image.source=https://github.com/LahaLuhem/chrysalis \
-      org.opencontainers.image.description="Android SDK (cmdline-tools, platform-tools, build-tools, a platform) on Ubuntu"
-
+# OCI labels + annotations are workflow-owned (docker/metadata-action in build-image.yml),
+# not baked here. See APPENDIX.md#oci-native-images.
 USER root
 
 ENV ANDROID_HOME=/opt/android-sdk-linux \
