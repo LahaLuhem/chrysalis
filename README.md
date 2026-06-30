@@ -3,6 +3,7 @@
 [![Build images](https://github.com/LahaLuhem/chrysalis/actions/workflows/build_and_push.yml/badge.svg?branch=master)](https://github.com/LahaLuhem/chrysalis/actions/workflows/build_and_push.yml)
 [![Test](https://github.com/LahaLuhem/chrysalis/actions/workflows/test.yml/badge.svg?branch=master)](https://github.com/LahaLuhem/chrysalis/actions/workflows/test.yml)
 ![multi-arch](https://img.shields.io/badge/arch-amd64%20%7C%20arm64-2496ED)
+![OCI image spec](https://img.shields.io/badge/OCI-image%20spec%20v1-2496ED)
 [![ghcr.io: flutter](https://img.shields.io/badge/ghcr.io-lahaluhem%2Fflutter-2496ED?logo=docker&logoColor=white)](https://github.com/LahaLuhem/chrysalis/pkgs/container/flutter)
 [![ghcr.io: android-sdk](https://img.shields.io/badge/ghcr.io-lahaluhem%2Fandroid--sdk-2496ED?logo=docker&logoColor=white)](https://github.com/LahaLuhem/chrysalis/pkgs/container/android-sdk)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/LahaLuhem/chrysalis/pulls)
@@ -15,7 +16,8 @@
 Docker images with Flutter and the Android SDK baked in, for both `linux/amd64`
 and `linux/arm64`. They follow the latest stable Flutter and live on GHCR.
 
-They're plain OCI images, so they run anywhere: any CI, any container runtime.
+They're OCI-native images (OCI media types, standard labels and annotations), so they
+run anywhere: any CI, any container runtime.
 
 <!-- TOC start (generated with https://github.com/derlin/bitdowntoc) -->
 

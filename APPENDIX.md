@@ -3,6 +3,7 @@
 - [`AGENTS.md` and `CLAUDE.md` are symlinks into `.ai/`](#ai-files-symlinked)
 - [Why this fork exists: maintained *and* multi-arch](#why-multi-arch)
 - [arm64 Linux builds Android only under x86-64 emulation](#arm64-android-build-limitation)
+- [Flutter is installed by `git clone`, not the release tarball](#flutter-clone-not-tarball)
 - [Multi-arch via native matrix + push-by-digest + manifest merge](#digest-merge-multiarch)
 - [Publishing is gated to `master` and manual dispatch](#publish-gating)
 - [Version tracking via Renovate, not a bespoke cron](#renovate-version-tracking)
@@ -137,6 +138,43 @@ verified. A present manifest is not a verified build.
 
 ---
 
+<a id="flutter-clone-not-tarball"></a>
+## Flutter is installed by `git clone`, not the release tarball
+
+- **Decision:** the `flutter` image gets its SDK from
+  `git clone --depth 1 --branch ${FLUTTER_VERSION} https://github.com/flutter/flutter.git`
+  ([`images/flutter/Dockerfile`](./images/flutter/Dockerfile)), not from the prebuilt
+  `flutter_linux_<ver>-stable.tar.xz` release archive the
+  [manual-install docs](https://docs.flutter.dev/install/manual) point at.
+- **Why (the decisive reason): there is no arm64 Linux Flutter tarball.** Every stable entry in
+  Flutter's `releases_linux.json` is `dart_sdk_arch: x64` (zero arm64). That archive bundles an
+  **x64 Dart SDK**, so dropping it onto the arm64 image would run `flutter`/`dart` under x86-64
+  emulation. That breaks the native-arm64 promise this fork exists for
+  ([#why-multi-arch](#why-multi-arch)) and contradicts AGENTS hard rule 5 ("native arm64 is fine
+  for `flutter`/`dart`/test/analyze").
+- **What the clone does instead:** it fetches only the framework and tooling (arch-independent
+  Dart source plus shell scripts); the first `flutter` run bootstraps the **host-arch** Dart SDK
+  via `bin/internal/update_dart_sdk.sh`. So each per-arch image gets an arch-matched native Dart
+  with no extra logic:
+  - Flutter SDK tarball (`releases_linux.json`): x64 only, no arm64 published.
+  - Dart SDK (`dart-archive`): both arches, including `dartsdk-linux-arm64-release.zip` (what the
+    bootstrap pulls on the arm64 build).
+- **Why "involving git" is not actually heavy-handed:**
+  - **git is a hard Flutter dependency regardless of install method.** flutter_tools shells out to
+    git for version/channel/upgrade detection, and Flutter's manual-install page lists Git as a
+    required prerequisite *for the tarball route too*, so it is in the image either way.
+  - `--depth 1 --branch <tag>` is a shallow, single-branch checkout, not full history.
+  - The heavy bytes (Android engine artifacts) are pulled by `flutter precache --android` on first
+    run under either method, so the clone's only extra cost is a small shallow `.git`.
+- **Ties into version tracking:** the pin is consumed as the clone's `--branch` tag and tracked by
+  Renovate's `flutter-version` datasource; see
+  [#renovate-version-tracking](#renovate-version-tracking) for why that beats Dependabot.
+- **Rejected: download the x64 tarball and hand-swap an arm64 Dart SDK.** Unsupported, and the
+  tarball's framework expects its bundled Dart; the clone's bootstrap is the maintained path that
+  resolves the correct Dart per arch.
+
+---
+
 <a id="digest-merge-multiarch"></a>
 ## Multi-arch via native matrix + push-by-digest + manifest merge
 
@@ -157,6 +195,35 @@ verified. A present manifest is not a verified build.
 - **`provenance: false`.** Provenance/SBOM attestations add `unknown/unknown` entries to the
   manifest list that muddy `docker manifest inspect`; disabling them keeps the manifest to
   exactly the two platform images.
+
+---
+
+<a id="oci-native-images"></a>
+## OCI-native images
+
+- **Decision:** the published images are OCI-native. Each per-arch push-by-digest build runs with
+  `oci-mediatypes=true` (`outputs: type=image,...,oci-mediatypes=true` in `build-image.yml`), so the
+  arch's manifest, config, and layers carry `vnd.oci.*` media types instead of Docker schema 2;
+  `docker buildx imagetools create` then assembles them into an
+  `application/vnd.oci.image.index.v1+json` index. So `docker buildx imagetools inspect
+  ghcr.io/lahaluhem/<img>:<tag> --raw` reports the OCI index type.
+- **Metadata is workflow-owned, not baked into the Dockerfiles.** `docker/metadata-action` generates
+  the OCI labels (image config) and annotations; the Dockerfiles carry no `LABEL`s. The split build
+  means metadata attaches in two places: the per-arch push applies labels + manifest-level annotations
+  (`DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest`), and the merge applies index-level annotations, fed
+  to `imagetools create --annotation "index:..."` (`...LEVELS: index`). `title`/`description` are
+  curated per image (from `build_and_push.yml`); `source`/`revision`/`created`/`version`/`licenses`
+  fill in from the repo and the build commit.
+- **Two checks keep it honest.** On publish, the merge job runs
+  [`scripts/assert_oci_registry.sh`](./scripts/assert_oci_registry.sh) (the index, both arches, and
+  every manifest, config, and layer) plus `crane validate` on the pushed image. At PR time the amd64
+  build leg runs [`scripts/assert_oci_layout.sh`](./scripts/assert_oci_layout.sh) against a `type=oci`
+  build, so a regression to Docker media types fails before it can publish.
+- **Why not bake `LABEL`s in the Dockerfile?** One source avoids drift (a label edited in one
+  Dockerfile but not the other), lets `metadata-action` fill commit-derived fields
+  (`revision`/`created`) a static `LABEL` can't, and covers index-level annotations, which aren't
+  expressible as a Dockerfile `LABEL` at all (they live on the manifest list, which exists only after
+  the merge).
 
 ---
 
