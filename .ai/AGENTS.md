@@ -25,12 +25,17 @@ Why it exists: [`APPENDIX.md#why-multi-arch`](../APPENDIX.md#why-multi-arch).
 
 ## Scope — what this repo is and is NOT
 
-- **In scope:** building and publishing good OCI images — the Dockerfiles, the
-  build/publish workflow, and version tracking.
-- **Out of scope (by design):** *how or where* the images are consumed. These are standard
-  OCI images — any CI system, any OCI runtime. Consumption is portable and decided
-  separately. **Do not add consumer-specific logic** (no CI-system-specific entrypoints, no
-  runtime assumptions).
+- **In scope:** building and publishing good OCI images (the Dockerfiles, the build/publish
+  workflow, and version tracking), plus **inert, vendor-agnostic developer-experience helpers
+  baked on `PATH`** that do nothing until a user explicitly runs them and assume no particular
+  CI system. Already shipped: `cider`, `dependency_validator`, and the build-env helper
+  `ch-build-setup-android` ([`APPENDIX.md#build-setup-android`](../APPENDIX.md#build-setup-android)).
+- **Out of scope (by design):** *how or where* the images are consumed, and anything tied to a
+  specific CI system or that changes behaviour by default. No CI-system-specific entrypoints,
+  no auto-running hooks, no runtime assumptions (an always-on env var or entrypoint that alters
+  what every other command does, the reason `CI=true` was rejected:
+  [`APPENDIX.md#quiet-ci-defaults`](../APPENDIX.md#quiet-ci-defaults)). The line: a helper you
+  opt into by name is fine; behaviour imposed on commands you did not opt into is not.
 
 ## Stack
 
@@ -75,8 +80,12 @@ chrysalis/
 
 ## Hard rules
 
-1. **Scope is build + publish only.** Don't add anything about *consuming* the images (see
-   *Scope*). Consumption is intentionally portable and out of scope.
+1. **Scope is build + publish, plus inert opt-in DX helpers.** The core job is building and
+   publishing good OCI images. Vendor-agnostic helpers that sit on `PATH` and do nothing until
+   explicitly invoked (`cider`, `ch-build-setup-android`) are in scope. What stays out: logic
+   tied to a specific CI system, and runtime assumptions (anything that changes behaviour for
+   commands the user did not opt into, the reason `CI=true` was rejected). See *Scope* and
+   [`APPENDIX.md#build-setup-android`](../APPENDIX.md#build-setup-android).
 2. **Registry is `ghcr.io/lahaluhem`** (lowercase). The package names — `flutter`,
    `android-sdk` — stay as-is.
 3. **`android-sdk` is the base for `flutter`.** Its multi-arch manifest list must be
