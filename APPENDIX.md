@@ -349,8 +349,7 @@ verified. A present manifest is not a verified build.
   that materialises the files an Android `flutter build apk|aab` expects, a
   `--dart-define-from-file` file, `android/app/google-services.json`, and dev signing (a keystore
   plus `android/key.properties`), from namespaced `CH_BUILD_*` env vars. It is called explicitly
-  in a build job and does nothing on its own. (Implementation lands in follow-up steps; this
-  records the agreed design.)
+  in a build job and does nothing on its own.
 - **Why it counts as in scope, though it looks like consumer logic:** the portable-image rule
   ([#quiet-ci-defaults](#quiet-ci-defaults)) forbids *runtime assumptions*, things that change
   behaviour for every command by default (why `CI=true` was rejected). It does not forbid inert
@@ -374,6 +373,15 @@ verified. A present manifest is not a verified build.
   its path, so a build job can cache it and keep the signing key stable across runs. A stable key
   on clean runners still needs a user-provided keystore (a possible later mode). The default
   password is a get-going convenience, not a stability lever.
+- **PKCS12-only, one password.** JKS is deprecated, so the helper always generates a PKCS12
+  keystore (no type knob, and keytool's migration warning is gone). PKCS12 uses one password for
+  the store and the key, so the two password vars were collapsed into a single
+  `CH_BUILD_ANDROID_KEYSTORE_PASSWORD`; making them unequal is now impossible, which removes the
+  classic PKCS12 mismatch footgun. Validated empirically: `apksigner`, the tool Gradle invokes to
+  sign, signed an APK with the generated keystore. A literal `flutter build apk --release` could
+  not confirm it end to end on the arm64 host because Android release AOT needs the x86 path
+  ([#arm64-android-build-limitation](#arm64-android-build-limitation)), which is the image's known
+  limitation, not a signing issue.
 - **Why `CH_BUILD_CACHE_*` names the keystore path.** That file is invisible to the user except as
   something to cache, so it is named for that purpose, not as an internal output path. The prefix
   is forward-looking: other cacheable locations (Gradle home, the pub cache) can join it. The
