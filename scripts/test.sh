@@ -117,7 +117,9 @@ run_lint() {
   if lint_tool actionlint .github/workflows/*.yml; then ok 'workflows clean'; else bad 'actionlint'; fi
 
   section 'shellcheck (shell scripts)'
-  if lint_tool shellcheck scripts/*.sh; then ok 'scripts clean'; else bad 'shellcheck'; fi
+  # scripts/*.sh plus the helpers baked into the flutter image (images/flutter/scripts/*, on-PATH
+  # commands so no .sh suffix); the latter glob auto-covers any helper added to that dir.
+  if lint_tool shellcheck scripts/*.sh images/flutter/scripts/*; then ok 'scripts clean'; else bad 'shellcheck'; fi
 
   section 'biome (JSON/JSONC)'
   if lint_tool biome lint .; then ok 'JSON/JSONC clean'; else bad 'biome'; fi

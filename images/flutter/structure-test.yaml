@@ -26,12 +26,27 @@ commandTests:
     command: dependency_validator
     args: ['--help']
     exitCode: 0
+  # Build-env setup helper from the flutter Dockerfile's "Build-env setup helper" layer: prove it's
+  # on PATH and runs. --help is the stable exit-0 invocation (it precedes the project-root check, so
+  # it needs no pubspec.yaml) and prints to stdout, which expectedOutput matches.
+  - name: ch-build-setup-android runs (build-env prep helper)
+    command: ch-build-setup-android
+    args: ['--help']
+    exitCode: 0
+    expectedOutput:
+      - 'dart-define'
+      - 'CH_BUILD_DART_DEFINE_FILE'
 
-# The image ships with telemetry off and Flutter's version-freshness check skipped
-# (see the flutter Dockerfile): assert those env defaults are actually baked in.
+# The image ships with telemetry off and Flutter's version-freshness check skipped, and bakes the
+# two published paths the build-env helper writes/reads (see the flutter Dockerfile): assert those
+# env defaults are actually baked in.
 metadataTest:
   envVars:
     - key: FLUTTER_SUPPRESS_ANALYTICS
       value: "true"
     - key: BOT
       value: "true"
+    - key: CH_BUILD_DART_DEFINE_FILE
+      value: "lib/env/dart_defines.env"
+    - key: CH_BUILD_CACHE_KEYSTORE
+      value: "android/app/ch-signing.jks"
