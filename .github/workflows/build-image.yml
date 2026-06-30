@@ -82,13 +82,13 @@ jobs:
       - name: Structure test
         env:
           IMG: ${{ inputs.name }}
-          # renovate: datasource=docker depName=ghcr.io/lahaluhem/linterpol
-          LINTERPOL_IMAGE: ghcr.io/lahaluhem/linterpol:latest@sha256:0c7b9fd505693f47346e1218d58ae87a2ee19c38dc56e0f7333af7914b63e9b3
         run: |
-          # container-structure-test from the pinned Linterpol image (same image as scripts/test.sh).
-          # The image-under-test was loaded into the runner's daemon by "Build for test (load)";
-          # mount the runner's Docker socket so the container reaches it, run as root for socket
-          # access, and use the default daemon driver (specs use commandTests; tar can't run those).
+          # container-structure-test from the Linterpol image, pinned in .github/lint-tools.env
+          # (single source, read the same way as scripts/test.sh). The image-under-test was loaded
+          # into the runner's daemon by "Build for test (load)"; mount the runner's Docker socket so
+          # the container reaches it, run as root for socket access, and use the default daemon driver
+          # (specs use commandTests; tar can't run those).
+          LINTERPOL_IMAGE="$(grep -E '^LINTERPOL_IMAGE=' .github/lint-tools.env | cut -d= -f2-)"
           docker run --rm --user 0:0 \
             -v /var/run/docker.sock:/var/run/docker.sock \
             -v "$PWD:/work:ro" -w /work \
