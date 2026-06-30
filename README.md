@@ -80,8 +80,8 @@ Here's each layer, and why it's there:
 <details>
 <summary>Flutter DX tools</summary>
 
-Two Dart CLIs are activated globally and put on `PATH`. Handy for project chores, not
-needed to build:
+Two Dart CLIs are shipped as native binaries on `PATH` (compiled with `dart compile exe`).
+Handy for project chores, not needed to build:
 
 - [`cider`](https://pub.dev/packages/cider): version bumps and `CHANGELOG.md` management.
 - [`dependency_validator`](https://pub.dev/packages/dependency_validator): flags missing,
