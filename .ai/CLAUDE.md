@@ -22,10 +22,14 @@ mistagged push is visible to anyone who pulls — so publishing is a confirm-fir
 
 ## How the user wants work driven
 
-- **Plan first, then execute incrementally.** For any non-trivial task, present a written
-  plan (sub-tasks + intended changes) and **wait for review** before editing. Then do **one
-  sub-task at a time**, pausing for review between them. Do **not** one-shot a multi-step
-  change.
+- **Plan first, then execute incrementally, and actually stop between steps.** For any
+  non-trivial task, present a written plan (sub-tasks + intended changes) and **wait for
+  review** before editing. Then do **one sub-task at a time**: make the change, show what
+  changed, and **stop for review before starting the next**. Approving the plan or saying "go
+  ahead" greenlights the **first** sub-task only; it is **not** permission to run the whole
+  plan end-to-end. Keep pausing between every step until the user explicitly says to stop
+  pausing. Never one-shot a multi-step change. (This has been a repeated miss; treat it as a
+  hard gate. See AGENTS.md hard rule 10.)
 - **Ask before choosing between defensible alternatives.** If a reasonable maintainer could
   disagree with a pick, stop and ask — list options with trade-offs, mark your
   recommendation with `★`, then wait. Obvious single-answer fixes (typo, one-correct-patch
@@ -70,7 +74,10 @@ you did NOT.
 - **Dockerfile changes build** for the affected arch(es) locally where feasible.
 - **arm64-affecting changes validated natively** — or an explicit note of what wasn't.
 - **A publish is "done" only when `docker manifest inspect <ref>` shows BOTH `linux/amd64`
-  and `linux/arm64`.** Never claim a successful multi-arch publish otherwise.
+  and `linux/arm64`, and the index reports the OCI media type**
+  (`application/vnd.oci.image.index.v1+json`). Never claim a successful multi-arch publish
+  otherwise. `build-image.yml` enforces this on publish (`scripts/assert_oci_registry.sh` +
+  `crane validate`).
 - Report outcomes faithfully — if CI hasn't run or you couldn't verify, say so.
 
 ## Auto-memory conventions for this project

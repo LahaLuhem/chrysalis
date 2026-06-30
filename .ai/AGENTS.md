@@ -97,11 +97,20 @@ chrysalis/
 7. **Verify action/tool versions against their registries before pinning** — never from
    memory (GitHub API `releases/latest`, Docker Hub, pub.dev). See
    `~/.claude/rules/dependency-versions.md`.
-8. **Never report a multi-arch publish as successful without `docker manifest inspect
-   <ref>` showing BOTH `linux/amd64` and `linux/arm64`.**
+8. **Never report a multi-arch publish as successful without `docker manifest inspect <ref>`
+   showing BOTH `linux/amd64` and `linux/arm64` *and* the index reporting the OCI media type**
+   (`application/vnd.oci.image.index.v1+json`). `build-image.yml`'s merge job enforces this on every
+   publish (`scripts/assert_oci_registry.sh` + `crane validate`); rationale in
+   [`APPENDIX.md#oci-native-images`](../APPENDIX.md#oci-native-images).
 9. **Keep version tracking arch-independent.** Renovate (`.github/renovate.jsonc`) watches the
    stable Flutter channel and opens a weekly version-bump PR; merging republishes. Version
    tracking stays platform-agnostic by design; never couple it to an arch.
+10. **Execute multi-step work incrementally: one sub-task at a time, pausing for review between
+    each.** Present a plan and wait for review before editing; then make one sub-task's change,
+    show the result, and **stop** for review before starting the next. Approving the plan (or
+    saying "go ahead") greenlights the **first** sub-task only, not the whole plan run
+    end-to-end. Keep pausing between every step until the user explicitly says to stop. Never
+    one-shot a multi-step change.
 
 ## Build & publish flow
 
