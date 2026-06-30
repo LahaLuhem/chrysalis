@@ -46,16 +46,13 @@
       ]
     },
     {
-      "description": "Track the global Dart DX CLIs (cider, dependency_validator) pinned on the `dart pub global activate` lines in the flutter Dockerfile. datasource=dart is pub.dev; semver versioning.",
+      "description": "Track the Dart DX CLIs (cider, dependency_validator) pinned as ENV <NAME>_VERSION in the flutter Dockerfile, each under a `# renovate:` marker. They're compiled with `dart compile exe` (not `pub global activate`); the pins are plain ENV lines, so the inline-marker convention fits (same shape as YQ_VERSION below). datasource=dart is pub.dev.",
       "customType": "regex",
       "managerFilePatterns": ["/^images/flutter/Dockerfile$/"],
-      // depName + currentValue are read off each `activate <pkg> <version>` line; datasource and
-      // versioning are fixed here rather than via an inline `# renovate: …` marker, because a comment
-      // between the two chained activate RUNs would trip hadolint DL3059 (consecutive-RUN consolidation).
+      // datasource + depName come from each `# renovate:` marker, currentValue from the ENV pin.
       "matchStrings": [
-        "dart pub global activate (?<depName>[a-z0-9_]+) (?<currentValue>\\d+\\.\\d+\\.\\d+)"
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+ENV \\S+_VERSION=(?<currentValue>\\S+)"
       ],
-      "datasourceTemplate": "dart",
       "versioningTemplate": "semver"
     },
     {
