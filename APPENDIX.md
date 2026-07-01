@@ -384,11 +384,19 @@ verified. A present manifest is not a verified build.
   limitation, not a signing issue.
 - **Why `CH_BUILD_CACHE_*` names the keystore path.** That file is invisible to the user except as
   something to cache, so it is named for that purpose, not as an internal output path. The prefix
-  is forward-looking: other cacheable locations (Gradle home, the pub cache) can join it. The
+  is forward-looking: other cacheable locations can join it, and the Gradle caches have (next point). The
   build-command path is a separate var (`CH_BUILD_DART_DEFINE_FILE`) because its purpose is to be
   passed to `--dart-define-from-file`. Both are baked as *relative* image `ENV`s: a child process
   cannot export into the parent job shell, but a constant path can be baked once and referenced by
   both the helper and the user.
+- **Gradle caching is two narrow paths, not all of `~/.gradle`.** The family grew to cover Gradle
+  via `CH_BUILD_CACHE_GRADLE_MODULES` (`caches/modules-2`, dependencies) and
+  `CH_BUILD_CACHE_GRADLE_DISTS` (`wrapper/dists`, the distribution), with `GRADLE_USER_HOME` pinned
+  to its default so both resolve deterministically. Caching the whole `~/.gradle` was rejected: it
+  also holds the daemon, lock files, and execution history, churn that bloats a cache without
+  helping, and `modules-2` alone can reach several GB. Unlike the keystore (an image-produced
+  artifact at a project-relative path), these are absolute, standard Gradle locations the helper
+  never touches, so they are pure cache hints for the consumer to opt into.
 - **No direnv; a single in-script var registry instead.** The `CH_BUILD_*` surface will grow, but
   direnv (`.envrc`) is a per-directory env *loader* for interactive shells. It mismatches CI and
   `docker run` sourcing (vars arrive from the secret store or `--env-file`, non-interactively) and,

@@ -50,3 +50,9 @@ metadataTest:
       value: "lib/env/dart_defines.env"
     - key: CH_BUILD_CACHE_KEYSTORE
       value: "android/app/ch-signing.p12"
+    - key: GRADLE_USER_HOME
+      value: "/root/.gradle"
+    - key: CH_BUILD_CACHE_GRADLE_MODULES
+      value: "/root/.gradle/caches/modules-2"
+    - key: CH_BUILD_CACHE_GRADLE_DISTS
+      value: "/root/.gradle/wrapper/dists"

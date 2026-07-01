@@ -161,6 +161,24 @@ stable; otherwise each run mints a fresh one and installed builds can't update i
 
 </details>
 
+### Caching Gradle (optional, for speed)
+
+Gradle downloads its dependencies and its own distribution on the first build. Two paths are baked
+in so a build job can cache them across runs (`GRADLE_USER_HOME` is pinned to `/root/.gradle`):
+
+| Variable | Points to |
+| --- | --- |
+| `CH_BUILD_CACHE_GRADLE_MODULES` | `$GRADLE_USER_HOME/caches/modules-2`, the downloaded dependencies |
+| `CH_BUILD_CACHE_GRADLE_DISTS` | `$GRADLE_USER_HOME/wrapper/dists`, the Gradle distribution the wrapper fetches |
+
+These are deliberately narrow: caching all of `~/.gradle` would also drag in daemon logs, lock
+files, and execution history you don't want.
+
+> **Mind the cache size.** The dependency cache (`modules-2`) can run to several GB. On a
+> single-project ephemeral runner that's usually fine, but check that caching it (uploaded and
+> downloaded every run) actually beats re-fetching, otherwise the cache itself becomes the
+> bottleneck.
+
 ## Architecture support
 
 Almost everything runs natively on both arches. The one catch is building
