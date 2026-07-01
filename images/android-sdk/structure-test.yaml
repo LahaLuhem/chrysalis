@@ -49,3 +49,10 @@ commandTests:
     command: yq
     args: ['--version']
     exitCode: 0
+  # openssl backs the ch-fetch-firebase-config helper (shipped in the flutter image on top): it
+  # signs the OAuth2 JWT and base64-decodes the config. Assert it's on PATH here, where it's
+  # installed. Arch-agnostic exit-0 check.
+  - name: openssl is runnable (backs the Firebase config fetcher)
+    command: openssl
+    args: ['version']
+    exitCode: 0

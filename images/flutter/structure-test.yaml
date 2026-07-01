@@ -26,9 +26,10 @@ commandTests:
     command: dependency_validator
     args: ['--help']
     exitCode: 0
-  # Build-env setup helper from the flutter Dockerfile's "Build-env setup helper" layer: prove it's
-  # on PATH and runs. --help is the stable exit-0 invocation (it precedes the project-root check, so
-  # it needs no pubspec.yaml) and prints to stdout, which expectedOutput matches.
+  # Build-env setup helpers from the flutter Dockerfile's "Build-env setup helpers" layer: prove
+  # they're on PATH and run. --help is the stable exit-0 invocation (it precedes any required-arg
+  # or project-root checks, so it needs no pubspec.yaml or env) and prints to stdout, which
+  # expectedOutput matches.
   - name: ch-build-setup-android runs (build-env prep helper)
     command: ch-build-setup-android
     args: ['--help']
@@ -36,6 +37,13 @@ commandTests:
     expectedOutput:
       - 'dart-define'
       - 'CH_BUILD_DART_DEFINE_FILE'
+  - name: ch-fetch-firebase-config runs (standalone Firebase config fetcher)
+    command: ch-fetch-firebase-config
+    args: ['--help']
+    exitCode: 0
+    expectedOutput:
+      - '--android'
+      - 'CH_BUILD_FIREBASE_CLIENT_EMAIL'
 
 # The image ships with telemetry off and Flutter's version-freshness check skipped, and bakes the
 # two published paths the build-env helper writes/reads (see the flutter Dockerfile): assert those
