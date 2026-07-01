@@ -57,13 +57,14 @@ RUN set -eux; \
     dart pub global deactivate dependency_validator; \
     rm -rf "${PUB_CACHE:?}/global_packages" "${PUB_CACHE:?}/bin" "${PUB_CACHE:?}/hosted"
 
-# --- Build-env setup helper (DX only, not needed to build) ---
+# --- Build-env setup helpers (DX only, not needed to build) ---
 # ch-build-setup-android materialises the files an Android `flutter build apk|aab` needs
-# (dart-define file, google-services.json, dev signing) from CH_BUILD_* env vars. Inert and
-# opt-in: it does nothing until explicitly invoked, so non-build jobs pay nothing. The whole
-# scripts/ dir is COPYed so adding another helper later needs no Dockerfile change, and --chmod
-# makes them executable regardless of the checked-out file mode.
-# Why it lives here and how it works: ../../APPENDIX.md#build-setup-android.
+# (dart-define file, google-services.json, dev signing) from CH_BUILD_* env vars, delegating the
+# google-services fetch to ch-fetch-firebase-config (a standalone Firebase config fetcher, also
+# usable on its own). Both are inert and opt-in: they do nothing until explicitly invoked, so
+# non-build jobs pay nothing. The whole scripts/ dir is COPYed so adding another helper needs no
+# Dockerfile change, and --chmod makes them executable regardless of the checked-out file mode.
+# Why they live here and how they work: ../../APPENDIX.md#build-setup-android.
 COPY --chmod=0755 scripts/ /usr/local/bin/
 
 # Published paths the helper writes and the user references (relative to the project root at

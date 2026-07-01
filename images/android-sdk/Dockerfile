@@ -29,7 +29,8 @@ ENV ANDROID_SDK_TOOLS_VERSION=13114758
 # Convenience (DX) tools (see "What's in the image" in the README).
 RUN apt-get update \
     && apt-get install -y openjdk-21-jdk \
-    && apt-get install -y sudo wget zip unzip git openssh-client curl build-essential libstdc++6 locales --no-install-recommends \
+    # openssl signs the OAuth2 JWT for the ch-fetch-firebase-config helper (which also uses curl + jq)
+    && apt-get install -y sudo wget zip unzip git openssh-client curl openssl build-essential libstdc++6 locales --no-install-recommends \
     # Convenience (DX): jq (JSON), lcov (coverage reports)
     && apt-get install -y jq lcov --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
