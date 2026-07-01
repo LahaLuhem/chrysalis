@@ -124,7 +124,7 @@ without writing anything.
 | Variable | What it does |
 | --- | --- |
 | `CH_BUILD_DEFINE_<KEY>` | one per dart-define, written verbatim as `<KEY>=<value>`; set as many as you need |
-| `CH_BUILD_ANDROID_GOOGLE_SERVICES` | the full `google-services.json` content, written to `android/app/google-services.json` |
+| `CH_BUILD_ANDROID_FIREBASE_APP_ID`, `CH_BUILD_FIREBASE_CLIENT_EMAIL`, `CH_BUILD_FIREBASE_PRIVATE_KEY` | fetch `google-services.json` from Firebase; see [Google Services](#google-services-firebase) |
 | `CH_BUILD_ANDROID_KEYSTORE_PASSWORD` | PKCS12 keystore password (default `storepassword`) |
 | `CH_BUILD_ANDROID_KEY_ALIAS` | signing key alias (default `development`) |
 | `CH_BUILD_ANDROID_DNAME`, `_KEY_VALIDITY`, `_KEY_SIZE`, `_KEY_ALG` | `keytool` knobs, all sensibly defaulted |
@@ -136,6 +136,53 @@ hardcoding a location:
 | --- | --- | --- |
 | `CH_BUILD_DART_DEFINE_FILE` | `lib/env/dart_defines.env` | pass to `--dart-define-from-file` |
 | `CH_BUILD_CACHE_KEYSTORE` | `android/app/ch-signing.p12` | add to your build job's cache to keep one signing key across runs |
+
+### Google Services (Firebase)
+
+Rather than pasting the whole `google-services.json` into a CI secret, the helper fetches it from
+Firebase at build time (one authenticated call to the Firebase Management API) and writes
+`android/app/google-services.json`. You give it the Android app id and a service-account
+credential:
+
+| Variable | What it is |
+| --- | --- |
+| `CH_BUILD_ANDROID_FIREBASE_APP_ID` | the Android app id, e.g. `1:1234567890:android:abc123` |
+| `CH_BUILD_FIREBASE_CLIENT_EMAIL` | the service account's `client_email` |
+| `CH_BUILD_FIREBASE_PRIVATE_KEY` | its `private_key`; escaped `\n` or real newlines both work |
+
+The credential is project-scoped, so `CH_BUILD_FIREBASE_*` is shared across platforms and only the
+app id is Android-specific. All three go together: set none and the step is skipped (a committed
+`google-services.json` is left in place); set some but not all and it fails fast.
+
+The service account needs a single permission, `firebase.clients.get` (the predefined *Firebase
+Viewer* role includes it, and nothing more is required). There's no Firebase CLI in the image; the
+fetch is done by a small standalone helper, `ch-fetch-firebase-config`, that needs only
+`curl`/`jq`/`openssl`. `ch-build-setup-android` calls it with `--android`, but it runs on its own
+too (handy on a non-chrysalis runner, where you can fetch it straight from the repo):
+
+```bash
+ch-fetch-firebase-config --android            # -> android/app/google-services.json
+ch-fetch-firebase-config --android --dry-run  # show what it would do, fetch nothing
+```
+
+The same fetcher handles iOS: `ch-fetch-firebase-config --ios` writes
+`ios/Runner/GoogleService-Info.plist` from `CH_BUILD_IOS_FIREBASE_APP_ID` and the same shared
+credential. iOS builds need macOS, so that path is for a macOS runner; chrysalis's own images build
+Android on Linux.
+
+<details>
+<summary>Creating the service account</summary>
+
+In the Google Cloud console for your Firebase project:
+
+1. **IAM & Admin → Service Accounts → Create service account.**
+2. Grant it a role that includes `firebase.clients.get`: the predefined **Firebase Viewer** works,
+   or a custom role with just that one permission.
+3. **Keys → Add key → Create new key → JSON**, and download it.
+4. Copy `client_email` and `private_key` from that JSON into `CH_BUILD_FIREBASE_CLIENT_EMAIL` and
+   `CH_BUILD_FIREBASE_PRIVATE_KEY`. The app id is in the Firebase console under Project settings.
+
+</details>
 
 ### Signing
 

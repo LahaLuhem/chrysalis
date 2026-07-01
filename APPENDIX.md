@@ -9,7 +9,7 @@
 - [Version tracking via Renovate, not a bespoke cron](#renovate-version-tracking)
 - [Quiet-by-default: telemetry off, version check skipped](#quiet-ci-defaults)
 - [DX CLIs are compiled to native binaries, not `pub global activate`](#dx-tools-native)
-- [Build-env setup helper: `ch-build-setup-android`](#build-setup-android)
+- [Build-env setup helpers: `ch-build-setup-android` + `ch-fetch-firebase-config`](#build-setup-android)
 
 <!-- TOC end -->
 
@@ -126,7 +126,9 @@ emulated, so overhead scales with how much native code you build: mild on Apple 
 - **An iOS/macOS `flutter-mac` image.** Out of scope, and not a Docker image at all: iOS
   needs a **macOS VM on Apple Silicon Mac hardware** (Tart / Apple `Virtualization.framework`),
   a separate Mac-only product. Do iOS on macOS CI runners; a Tart image, if ever wanted, is a
-  separate sibling repo.
+  separate sibling repo. (Config *fetch* is the exception that stays in scope:
+  `ch-fetch-firebase-config --ios` pulls `GoogleService-Info.plist`, a platform-agnostic network
+  call rather than a build; see [#build-setup-android](#build-setup-android).)
 
 ### Guards
 `images/android-sdk/structure-test.yaml` asserts the x86-64 loader is present (deterministic,
@@ -343,13 +345,14 @@ verified. A present manifest is not a verified build.
 ---
 
 <a id="build-setup-android"></a>
-## Build-env setup helper: `ch-build-setup-android`
+## Build-env setup helpers: `ch-build-setup-android` + `ch-fetch-firebase-config`
 
 - **Decision:** the `flutter` image ships an inert helper on `PATH`, `ch-build-setup-android`,
   that materialises the files an Android `flutter build apk|aab` expects, a
-  `--dart-define-from-file` file, `android/app/google-services.json`, and dev signing (a keystore
-  plus `android/key.properties`), from namespaced `CH_BUILD_*` env vars. It is called explicitly
-  in a build job and does nothing on its own.
+  `--dart-define-from-file` file, `android/app/google-services.json` (fetched from Firebase, see
+  below), and dev signing (a keystore plus `android/key.properties`), from namespaced `CH_BUILD_*`
+  env vars. It is called explicitly in a build job and does nothing on its own. A second helper,
+  `ch-fetch-firebase-config`, performs the Firebase fetch and is usable standalone.
 - **Why it counts as in scope, though it looks like consumer logic:** the portable-image rule
   ([#quiet-ci-defaults](#quiet-ci-defaults)) forbids *runtime assumptions*, things that change
   behaviour for every command by default (why `CI=true` was rejected). It does not forbid inert
@@ -367,6 +370,45 @@ verified. A present manifest is not a verified build.
   it (flutter strips wrapping quotes, treats an unquoted trailing `#` as a comment, and rejects
   multi-line values). No delimiter to invent, no JSON to assemble, and no base64 by default
   (base64 was only a CI-specific escaping workaround, not part of the general mechanism).
+- **google-services is fetched from Firebase, not pasted as a blob.** An earlier
+  `CH_BUILD_ANDROID_GOOGLE_SERVICES` (the whole `google-services.json` in one secret) was replaced,
+  not complemented: the helper now fetches the config at build time from the Firebase Management
+  API (`projects/-/androidApps/<appId>/config`, the same "apps getConfig" call `firebase
+  apps:sdkconfig` wraps) and writes `android/app/google-services.json`. Fetching keeps the config in
+  sync with Firebase and a full blob out of the secret store. The Firebase CLI is deliberately *not*
+  installed for this: its standalone binary is ~250 MB and **x86-64-only** (no arm64 build, so on
+  the arm64 image it would run emulated for one HTTP GET), and the npm route drags the whole Node
+  runtime plus a large dependency tree into both images. getConfig is a single authenticated
+  request, so the helper makes it directly with `curl` + `jq` + `openssl` (all small; only `openssl`
+  had to be added to the android-sdk image). The `projects/-` wildcard resolves the app's project
+  from the app id, so no project id is an input.
+- **Non-interactive auth is a self-signed JWT, and the IAM floor is one permission.** The supported
+  CI auth for the Firebase CLI is a service-account key via `GOOGLE_APPLICATION_CREDENTIALS` (the
+  legacy `FIREBASE_TOKEN` / `login:ci` / `--token` is deprecated, and keyless WIF is buggy in
+  firebase-tools v15). Rolling our own skips the key file: the helper mints a short-lived OAuth2
+  token via the JWT-bearer flow, signing the assertion with `openssl` (RS256). That flow reads only
+  two fields of a service-account key, `client_email` and `private_key` (`token_uri` is the static
+  Google endpoint), so those are the only credential inputs; the rest of the key JSON (`project_id`,
+  `private_key_id`, `client_id`, the cert URLs, `universe_domain`) is never used, and reconstructing
+  a full JSON from them would be inert filler. Empirically the service account needs exactly
+  **`firebase.clients.get`**: a probe SA holding only that permission fetched the config, and five
+  other candidate permissions it did *not* hold were thereby proven unnecessary. The predefined
+  *Firebase Viewer* role includes `firebase.clients.get`, so it is the least-privilege stock role.
+- **The fetch lives in a shared `ch-fetch-firebase-config`, and the credential is project-scoped.**
+  getConfig differs across platforms only in the resource segment (`androidApps` vs `iosApps`) and
+  the output file (`google-services.json` vs `ios/Runner/GoogleService-Info.plist`); the token flow
+  and credential are identical (verified: one service account fetched both an Android and an iOS
+  config). So the fetch was extracted into a standalone, curl-able
+  `ch-fetch-firebase-config --android|--ios` that `ch-build-setup-android` delegates to. `--ios` is
+  enabled even though iOS *building* is out of scope (the `flutter-mac` rejected path in
+  [#arm64-android-build-limitation](#arm64-android-build-limitation)): the fetch is only a network
+  call, so it is useful standalone on a macOS runner, while nothing here builds iOS. Because the
+  service account is project-scoped, its credential is shared across platforms: `client_email` /
+  `private_key` are the platform-neutral `CH_BUILD_FIREBASE_*`, while only the app id is per-platform
+  (`CH_BUILD_ANDROID_FIREBASE_APP_ID`, `CH_BUILD_IOS_FIREBASE_APP_ID`), so it is never pasted twice.
+  The private key is accepted with literal `\n` (as copied out of the key JSON) or real newlines,
+  normalised in-shell, and piped to `openssl` through a process substitution so it never lands on
+  disk. `--dry-run` makes no network call.
 - **Keystore is generate-if-absent, with its path exposed for caching.** `keytool` mints a fresh
   random keypair on every run, so regenerating the keystore each job gives an *unstable* signing
   key no matter the password. The helper writes the keystore only when it is missing and publishes
