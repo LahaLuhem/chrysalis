@@ -15,6 +15,7 @@
 #   CH_BUILD_FIREBASE_CLIENT_EMAIL     the service account (needs the firebase.clients.get role)
 #   CH_BUILD_FIREBASE_PRIVATE_KEY      its private key (PEM; escaped \n or real newlines)
 #   CH_BUILD_ANDROID_FIREBASE_APP_ID   the Android app id, read for --android (1:NN:android:XX)
+#   CH_BUILD_IOS_FIREBASE_APP_ID       the iOS app id, read for --ios (1:NN:ios:XX)
 #
 # Run it from your Flutter project root; it writes the platform's standard path unless --out is
 # given. Why roll our own instead of the Firebase CLI, and the minimal IAM role:
@@ -34,8 +35,8 @@ ch-fetch-firebase-config: fetch a Firebase app's Google Services config into a F
 Mints a short-lived token from a service-account credential (no Firebase CLI needed) and calls
 the apps getConfig API. Run from your Flutter project root.
 
-  --android        fetch google-services.json -> android/app/google-services.json
-  --ios            reserved; not yet supported
+  --android        fetch google-services.json    -> android/app/google-services.json
+  --ios            fetch GoogleService-Info.plist -> ios/Runner/GoogleService-Info.plist
   --out FILE       write to FILE instead of the platform default
   -n, --dry-run    show what would be fetched/written; make no network call, write nothing
   -h, --help       this help
@@ -44,6 +45,7 @@ Environment (the service account is shared across platforms; the app id is per-p
   CH_BUILD_FIREBASE_CLIENT_EMAIL     the service account (needs the firebase.clients.get role)
   CH_BUILD_FIREBASE_PRIVATE_KEY      its private key (PEM; escaped \n or real newlines both work)
   CH_BUILD_ANDROID_FIREBASE_APP_ID   the Android app id, for --android
+  CH_BUILD_IOS_FIREBASE_APP_ID       the iOS app id, for --ios
 EOF
 }
 
@@ -94,12 +96,11 @@ main() {
     esac
     shift
   done
-  [ -n "$platform" ] || die "a platform is required: --android (try --help)"
+  [ -n "$platform" ] || die "a platform is required: --android or --ios (try --help)"
 
-  # Per-platform lookup: API resource kind, default output path, the app-id env var, and the
-  # token an app id of that platform must contain. Android is live; iOS is the seam -- fill in the
-  # row below and it works (getConfig, the token flow and the credential vars are all identical;
-  # only these three values differ). Keep in sync with ch-build-setup-* and
+  # Per-platform lookup: API resource kind, default output path, the app-id env var, and the token
+  # an app id of that platform must contain. getConfig, the token flow and the credential vars are
+  # identical across platforms; only these values differ. Keep in sync with ch-build-setup-* and
   # APPENDIX.md#build-setup-android.
   local api_kind out_default appid_var appid_token
   case "$platform" in
@@ -110,9 +111,10 @@ main() {
       appid_token=':android:'
       ;;
     ios)
-      # To enable: api_kind=iosApps; out_default=ios/Runner/GoogleService-Info.plist;
-      #            appid_var=CH_BUILD_IOS_FIREBASE_APP_ID; appid_token=':ios:'
-      die "iOS is not yet supported (out of scope for now; see APPENDIX.md#build-setup-android)"
+      api_kind=iosApps
+      out_default=ios/Runner/GoogleService-Info.plist
+      appid_var=CH_BUILD_IOS_FIREBASE_APP_ID
+      appid_token=':ios:'
       ;;
   esac
 

@@ -43,6 +43,7 @@ commandTests:
     exitCode: 0
     expectedOutput:
       - '--android'
+      - '--ios'
       - 'CH_BUILD_FIREBASE_CLIENT_EMAIL'
 
 # The image ships with telemetry off and Flutter's version-freshness check skipped, and bakes the
