@@ -70,8 +70,9 @@ print_help() {
   cat <<'EOF'
 ch-build-setup-android: prepare the working tree for `flutter build apk|aab`.
 
-Reads CH_BUILD_* environment variables and writes only what is set. Run from the Flutter
-project root. An existing android/key.properties is never overwritten.
+Reads CH_BUILD_* environment variables. The dart-define and google-services lanes are opt-in
+(nothing happens unless their vars are set); signing is always set up unless android/key.properties
+already exists. Run from the Flutter project root.
 
   -n, --dry-run   Show what would be written; write nothing.
   -h, --help      This help.

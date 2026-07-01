@@ -360,6 +360,16 @@ verified. A present manifest is not a verified build.
   ([#dx-tools-native](#dx-tools-native)): on `PATH`, no effect until called, no CI system assumed
   (it reads only env vars, which every CI provides). So it sits with `cider`, not with `CI=true`.
   The worry about wasted file I/O on non-build jobs is moot for free: those jobs never call it.
+- **Three orthogonal lanes; two opt-in, signing always-on.** The helper runs three independent
+  things, dart-defines, google-services, and dev signing, in any combination. dart-defines and
+  google-services are opt-in: with none of their vars set they do nothing (dart-defines is a
+  variadic list, skip-if-empty; google-services is an all-or-nothing set of three, where a partial
+  set is a fail-fast error). Signing is deliberately always-on: every run generates a dev keystore
+  and writes `android/key.properties` unless that file already exists. It stays always-on because,
+  unlike the Firebase fetch (a real credential plus a network call), it only mints a *local
+  throwaway* keystore with no external dependency and no secret, so the get-going convenience costs
+  nothing and needs no opt-in. Gating it on a required keystore password (so a no-vars run produces
+  nothing too) is a possible later mode; the asymmetry is intentional, not an oversight.
 - **dart-defines need no invented format, and the file carries no "type".** Traced through stable
   `flutter_tools` (`flutter_command.dart`): `--dart-define-from-file` content-sniffs JSON vs
   `.env` by a leading `{`; the `.env` branch builds a `Map<String,String>` while the JSON branch
@@ -406,9 +416,11 @@ verified. A present manifest is not a verified build.
   service account is project-scoped, its credential is shared across platforms: `client_email` /
   `private_key` are the platform-neutral `CH_BUILD_FIREBASE_*`, while only the app id is per-platform
   (`CH_BUILD_ANDROID_FIREBASE_APP_ID`, `CH_BUILD_IOS_FIREBASE_APP_ID`), so it is never pasted twice.
-  The private key is accepted with literal `\n` (as copied out of the key JSON) or real newlines,
-  normalised in-shell, and piped to `openssl` through a process substitution so it never lands on
-  disk. `--dry-run` makes no network call.
+  The private key is accepted in whatever form a CI variable can hold: a PEM (real or literal-`\n`
+  newlines), base64 of a PEM, or a bare base64 body. CI UIs such as GitLab reject the spaces in the
+  `-----BEGIN PRIVATE KEY-----` header, so the helper reconstructs the PEM from a header-less body
+  and decodes base64; whatever the form, it is normalised in-shell and piped to `openssl` through a
+  process substitution, so it never lands on disk. `--dry-run` makes no network call.
 - **Keystore is generate-if-absent, with its path exposed for caching.** `keytool` mints a fresh
   random keypair on every run, so regenerating the keystore each job gives an *unstable* signing
   key no matter the password. The helper writes the keystore only when it is missing and publishes

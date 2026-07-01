@@ -107,8 +107,7 @@ A `flutter build apk` / `appbundle` usually needs a few secret files staged firs
 `--dart-define-from-file` file, `android/app/google-services.json`, and a signing keystore with
 `android/key.properties`. Rather than hand-writing that in every CI job, the image ships
 **`ch-build-setup-android`**, an opt-in helper that materialises them from `CH_BUILD_*`
-environment variables. Call it once before your build; it does nothing until you do, so non-build
-jobs pay nothing.
+environment variables. Call it once before your build; a job that never invokes it pays nothing.
 
 ```bash
 # in your build job, before `flutter build`:
@@ -118,6 +117,17 @@ flutter build apk --release --dart-define-from-file="$CH_BUILD_DART_DEFINE_FILE"
 
 `ch-build-setup-android --help` lists every variable; `--dry-run` shows what it would write
 without writing anything.
+
+The helper runs three independent lanes; use any combination. Two are **opt-in** (they do nothing
+unless you set their variables); **signing is always-on** (a get-going convenience):
+
+| Lane | Runs when | Produces |
+| --- | --- | --- |
+| dart-defines | you set any `CH_BUILD_DEFINE_*` (0 or more) | the `--dart-define-from-file` file |
+| google-services | you set all three Firebase vars (none skips; a partial set errors) | `android/app/google-services.json` |
+| signing | always, unless `android/key.properties` already exists | a dev keystore + `android/key.properties` |
+
+Opt out of signing by committing your own `android/key.properties`; the helper never overwrites it.
 
 ### What it reads
 
@@ -146,7 +156,7 @@ Firebase at build time (one authenticated call to the Firebase Management API) a
 | Variable | What it is |
 | --- | --- |
 | `CH_BUILD_FIREBASE_CLIENT_EMAIL` | the service account's `client_email` (shared across platforms) |
-| `CH_BUILD_FIREBASE_PRIVATE_KEY` | its `private_key`; escaped `\n` or real newlines both work |
+| `CH_BUILD_FIREBASE_PRIVATE_KEY` | its `private_key`: a PEM, base64 of a PEM, or a header-less base64 body (see below) |
 | `CH_BUILD_ANDROID_FIREBASE_APP_ID` | the Android app id, for `--android` (`1:<num>:android:<hash>`) |
 | `CH_BUILD_IOS_FIREBASE_APP_ID` | the iOS app id, for `--ios` (`1:<num>:ios:<hash>`) |
 
@@ -156,6 +166,26 @@ not the *Encoded app ID* (`app-1-...`): the helper looks for the `:android:` / `
 rejects the encoded form. The credential plus the app id for the platform you fetch go together: set
 none and that step is skipped (a committed config is left in place); set some but not all and it
 fails fast.
+
+The helper accepts the private key in several shapes, so you can use whichever your CI variable UI
+will store. Masked / whitespace-checked variables (GitLab) want a single line with no spaces, which
+the raw PEM fails because its `-----BEGIN PRIVATE KEY-----` header contains spaces:
+
+| Value of `CH_BUILD_FIREBASE_PRIVATE_KEY` | Single line, no spaces | Helper accepts |
+| --- | :---: | :---: |
+| multi-line PEM (`-----BEGIN PRIVATE KEY-----` ... `-----END PRIVATE KEY-----`) | ✗ | ✓ |
+| PEM on one line, `\n`-escaped (`-----BEGIN PRIVATE KEY-----\nMIIEv...\n-----END PRIVATE KEY-----`) | ✗ (header has spaces) | ✓ |
+| body only, multi-line (base64 lines, no header/footer) | ✗ | ✓ |
+| body only on one line, `\n`-escaped (`MIIEv...\n...IDAQAB`) | ✓ | ✓ |
+| base64 of the whole PEM, one line (`LS0tLS1CRUdJ...`) | ✓ | ✓ |
+| empty, or not a private key | | ✗ (errors at signing) |
+
+So for GitLab store either your `\n`-escaped body or base64 of the key; both are single-line and
+space-free, and base64 is the tidiest (and maskable):
+
+```bash
+jq -r .private_key key.json | openssl base64 -A
+```
 
 The service account needs a single permission, `firebase.clients.get` (the predefined *Firebase
 Viewer* role includes it, and nothing more is required). There's no Firebase CLI in the image; the

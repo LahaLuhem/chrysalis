@@ -13,7 +13,7 @@
 # per-platform:
 #
 #   CH_BUILD_FIREBASE_CLIENT_EMAIL     the service account (needs the firebase.clients.get role)
-#   CH_BUILD_FIREBASE_PRIVATE_KEY      its private key (PEM; escaped \n or real newlines)
+#   CH_BUILD_FIREBASE_PRIVATE_KEY      its private key (a PEM, base64 of a PEM, or a header-less body)
 #   CH_BUILD_ANDROID_FIREBASE_APP_ID   the Android app id, read for --android (1:NN:android:XX)
 #   CH_BUILD_IOS_FIREBASE_APP_ID       the iOS app id, read for --ios (1:NN:ios:XX)
 #
@@ -43,7 +43,8 @@ the apps getConfig API. Run from your Flutter project root.
 
 Environment (the service account is shared across platforms; the app id is per-platform):
   CH_BUILD_FIREBASE_CLIENT_EMAIL     the service account (needs the firebase.clients.get role)
-  CH_BUILD_FIREBASE_PRIVATE_KEY      its private key (PEM; escaped \n or real newlines both work)
+  CH_BUILD_FIREBASE_PRIVATE_KEY      its private key: a PEM, base64 of a PEM, or a header-less
+                                     base64 body (for CI vars that reject the header's spaces)
   CH_BUILD_ANDROID_FIREBASE_APP_ID   the Android app id, for --android
   CH_BUILD_IOS_FIREBASE_APP_ID       the iOS app id, for --ios
 EOF
@@ -52,16 +53,36 @@ EOF
 # base64url-encode stdin (the RFC 7515 JWT encoding): base64, then +/ -> -_, drop padding.
 b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
 
+# Normalise a service-account private key ($1) to a PEM on stdout, accepting the forms a CI
+# variable can actually hold. CI UIs such as GitLab reject the spaces in the
+# "-----BEGIN PRIVATE KEY-----" header, so besides a real PEM we accept two whitespace-free forms:
+#   - a PEM, with real newlines or literal \n (as copied out of the key JSON);
+#   - base64 of a whole PEM (single line);
+#   - a bare base64 body with the header/footer stripped, which we wrap. Google service-account
+#     keys are always PKCS8, so the reconstructed header is fixed.
+normalize_private_key() {
+  local key
+  key="${1//\\n/$'\n'}"                       # literal \n -> real newlines
+  case "$key" in
+    *'-----BEGIN'*) printf '%s' "$key"; return 0 ;;
+  esac
+  # Not a PEM: base64 of a whole PEM, else a bare PKCS8 body to wrap.
+  if printf '%s' "$key" | openssl base64 -d -A 2>/dev/null | grep -q -- '-----BEGIN'; then
+    printf '%s' "$key" | openssl base64 -d -A
+  else
+    printf '%s\n%s\n%s\n' '-----BEGIN PRIVATE KEY-----' "$key" '-----END PRIVATE KEY-----'
+  fi
+}
+
 # Mint a short-lived Google OAuth2 access token for a service-account client email ($1) and
-# private key ($2, PEM), via the signed-JWT bearer flow, and print it. token_uri is the static
-# Google endpoint, and the private key is accepted with either literal \n (as copied out of the
-# key JSON) or real newlines. The key is piped to openssl through a process substitution, so it
-# is never written to disk. Any failure here calls die, which aborts the whole script (set -e
-# propagates it out of the $() capture).
+# private key ($2), via the signed-JWT bearer flow, and print it. token_uri is the static Google
+# endpoint; the key is normalised to PEM (see normalize_private_key) and piped to openssl through
+# a process substitution, so it never lands on disk. Any failure here calls die, which aborts the
+# whole script (set -e propagates it out of the $() capture).
 mint_sa_token() {
   local email="$1" aud='https://oauth2.googleapis.com/token'
   local key now exp header claims sig jwt resp token
-  key="${2//\\n/$'\n'}"
+  key="$(normalize_private_key "$2")"
 
   now="$(date +%s)"; exp="$((now + 3600))"
   header="$(printf '{"alg":"RS256","typ":"JWT"}' | b64url)"
