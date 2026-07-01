@@ -109,6 +109,22 @@ check_versions_env() {
   fi
 }
 
+# The two published paths live in two places: the flutter Dockerfile bakes them as ENV (so a build
+# job can reference them) and ch-build-setup-android's registry carries the same default (its
+# fallback when run outside the image). Assert they agree so the pair can't silently drift.
+check_ch_build_paths() {
+  local script='images/flutter/scripts/ch-build-setup-android' df='images/flutter/Dockerfile' var want got
+  for var in CH_BUILD_DART_DEFINE_FILE CH_BUILD_CACHE_KEYSTORE; do
+    want="$(grep -E "^$var\|" "$script" | head -1 | cut -d'|' -f2)"
+    got="$(grep -oE "$var=[^[:space:]]+" "$df" | head -1 | cut -d= -f2-)"
+    if [ -n "$want" ] && [ "$want" = "$got" ]; then
+      ok "$var agrees ($want)"
+    else
+      bad "$var drift: Dockerfile '$got' vs helper default '$want'"
+    fi
+  done
+}
+
 run_lint() {
   section 'hadolint (Dockerfiles)'
   if lint_tool hadolint images/android-sdk/Dockerfile images/flutter/Dockerfile; then ok 'Dockerfiles clean'; else bad 'hadolint'; fi
@@ -126,6 +142,9 @@ run_lint() {
 
   section 'versions.env sanity'
   check_versions_env
+
+  section 'ch-build-setup-android path consistency'
+  check_ch_build_paths
 }
 
 # Host-arch image tags (CI covers both arches via the matrix).
