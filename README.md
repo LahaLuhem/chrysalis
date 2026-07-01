@@ -141,18 +141,21 @@ hardcoding a location:
 
 Rather than pasting the whole `google-services.json` into a CI secret, the helper fetches it from
 Firebase at build time (one authenticated call to the Firebase Management API) and writes
-`android/app/google-services.json`. You give it the Android app id and a service-account
-credential:
+`android/app/google-services.json`. You give it the app id and a service-account credential:
 
 | Variable | What it is |
 | --- | --- |
-| `CH_BUILD_ANDROID_FIREBASE_APP_ID` | the Android app id, e.g. `1:1234567890:android:abc123` |
-| `CH_BUILD_FIREBASE_CLIENT_EMAIL` | the service account's `client_email` |
+| `CH_BUILD_FIREBASE_CLIENT_EMAIL` | the service account's `client_email` (shared across platforms) |
 | `CH_BUILD_FIREBASE_PRIVATE_KEY` | its `private_key`; escaped `\n` or real newlines both work |
+| `CH_BUILD_ANDROID_FIREBASE_APP_ID` | the Android app id, for `--android` (`1:<num>:android:<hash>`) |
+| `CH_BUILD_IOS_FIREBASE_APP_ID` | the iOS app id, for `--ios` (`1:<num>:ios:<hash>`) |
 
-The credential is project-scoped, so `CH_BUILD_FIREBASE_*` is shared across platforms and only the
-app id is Android-specific. All three go together: set none and the step is skipped (a committed
-`google-services.json` is left in place); set some but not all and it fails fast.
+The credential is project-scoped, so `CH_BUILD_FIREBASE_*` is shared across platforms; only the app
+id is per-platform. Use the plain **App ID** from the Firebase console (`1:<num>:<platform>:<hash>`),
+not the *Encoded app ID* (`app-1-...`): the helper looks for the `:android:` / `:ios:` marker, so it
+rejects the encoded form. The credential plus the app id for the platform you fetch go together: set
+none and that step is skipped (a committed config is left in place); set some but not all and it
+fails fast.
 
 The service account needs a single permission, `firebase.clients.get` (the predefined *Firebase
 Viewer* role includes it, and nothing more is required). There's no Firebase CLI in the image; the
