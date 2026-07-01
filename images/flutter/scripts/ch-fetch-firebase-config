@@ -1,0 +1,163 @@
+#!/usr/bin/env bash
+#
+# ch-fetch-firebase-config: fetch a Firebase app's Google Services config into a Flutter project,
+# without the Firebase CLI (a ~250 MB, x86-64-only, Node-based dependency).
+#
+# It mints a short-lived Google OAuth2 token from a service-account credential (the signed-JWT
+# bearer flow, via openssl) and calls the Firebase Management "apps getConfig" API. Beyond
+# coreutils it needs only curl, jq and openssl, all present in the chrysalis image, so it is also
+# self-contained enough to curl from GitHub and run on any CI runner.
+#
+# It reads namespaced CH_BUILD_* environment variables (so it assumes no particular CI system).
+# The service account is project-scoped and shared across platforms; only the app id is
+# per-platform:
+#
+#   CH_BUILD_FIREBASE_CLIENT_EMAIL     the service account (needs the firebase.clients.get role)
+#   CH_BUILD_FIREBASE_PRIVATE_KEY      its private key (PEM; escaped \n or real newlines)
+#   CH_BUILD_ANDROID_FIREBASE_APP_ID   the Android app id, read for --android (1:NN:android:XX)
+#
+# Run it from your Flutter project root; it writes the platform's standard path unless --out is
+# given. Why roll our own instead of the Firebase CLI, and the minimal IAM role:
+# ../../APPENDIX.md#build-setup-android.
+#
+# Usage: ch-fetch-firebase-config (--android | --ios) [--out FILE] [--dry-run] [--help]
+#
+set -euo pipefail
+
+log() { printf 'ch-fetch-firebase-config: %s\n' "$1" >&2; }
+die() { printf 'ch-fetch-firebase-config: error: %s\n' "$1" >&2; exit 1; }
+
+print_help() {
+  cat <<'EOF'
+ch-fetch-firebase-config: fetch a Firebase app's Google Services config into a Flutter project.
+
+Mints a short-lived token from a service-account credential (no Firebase CLI needed) and calls
+the apps getConfig API. Run from your Flutter project root.
+
+  --android        fetch google-services.json -> android/app/google-services.json
+  --ios            reserved; not yet supported
+  --out FILE       write to FILE instead of the platform default
+  -n, --dry-run    show what would be fetched/written; make no network call, write nothing
+  -h, --help       this help
+
+Environment (the service account is shared across platforms; the app id is per-platform):
+  CH_BUILD_FIREBASE_CLIENT_EMAIL     the service account (needs the firebase.clients.get role)
+  CH_BUILD_FIREBASE_PRIVATE_KEY      its private key (PEM; escaped \n or real newlines both work)
+  CH_BUILD_ANDROID_FIREBASE_APP_ID   the Android app id, for --android
+EOF
+}
+
+# base64url-encode stdin (the RFC 7515 JWT encoding): base64, then +/ -> -_, drop padding.
+b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
+
+# Mint a short-lived Google OAuth2 access token for a service-account client email ($1) and
+# private key ($2, PEM), via the signed-JWT bearer flow, and print it. token_uri is the static
+# Google endpoint, and the private key is accepted with either literal \n (as copied out of the
+# key JSON) or real newlines. The key is piped to openssl through a process substitution, so it
+# is never written to disk. Any failure here calls die, which aborts the whole script (set -e
+# propagates it out of the $() capture).
+mint_sa_token() {
+  local email="$1" aud='https://oauth2.googleapis.com/token'
+  local key now exp header claims sig jwt resp token
+  key="${2//\\n/$'\n'}"
+
+  now="$(date +%s)"; exp="$((now + 3600))"
+  header="$(printf '{"alg":"RS256","typ":"JWT"}' | b64url)"
+  claims="$(printf '{"iss":"%s","scope":"https://www.googleapis.com/auth/cloud-platform","aud":"%s","iat":%s,"exp":%s}' \
+    "$email" "$aud" "$now" "$exp" | b64url)"
+  sig="$(printf '%s' "${header}.${claims}" | openssl dgst -sha256 -sign <(printf '%s' "$key") | b64url)" \
+    || die "failed to sign the auth token with openssl (check CH_BUILD_FIREBASE_PRIVATE_KEY)"
+  jwt="${header}.${claims}.${sig}"
+
+  resp="$(curl -sS -X POST "$aud" \
+    -d 'grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer' \
+    --data-urlencode "assertion=${jwt}")" \
+    || die "auth token request to Google failed (network)"
+  token="$(printf '%s' "$resp" | jq -r '.access_token // empty')"
+  [ -n "$token" ] \
+    || die "auth failed: $(printf '%s' "$resp" | jq -r '.error_description // .error // "no access_token returned"')"
+  printf '%s' "$token"
+}
+
+main() {
+  local platform='' out='' dry_run=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --android)    platform=android ;;
+      --ios)        platform=ios ;;
+      --out)        shift; [ $# -gt 0 ] || die "--out needs a path"; out="$1" ;;
+      -n|--dry-run) dry_run=1 ;;
+      -h|--help)    print_help; exit 0 ;;
+      --)           shift; break ;;
+      -*)           die "unknown option: $1 (try --help)" ;;
+      *)            die "unexpected argument: $1 (try --help)" ;;
+    esac
+    shift
+  done
+  [ -n "$platform" ] || die "a platform is required: --android (try --help)"
+
+  # Per-platform lookup: API resource kind, default output path, the app-id env var, and the
+  # token an app id of that platform must contain. Android is live; iOS is the seam -- fill in the
+  # row below and it works (getConfig, the token flow and the credential vars are all identical;
+  # only these three values differ). Keep in sync with ch-build-setup-* and
+  # APPENDIX.md#build-setup-android.
+  local api_kind out_default appid_var appid_token
+  case "$platform" in
+    android)
+      api_kind=androidApps
+      out_default=android/app/google-services.json
+      appid_var=CH_BUILD_ANDROID_FIREBASE_APP_ID
+      appid_token=':android:'
+      ;;
+    ios)
+      # To enable: api_kind=iosApps; out_default=ios/Runner/GoogleService-Info.plist;
+      #            appid_var=CH_BUILD_IOS_FIREBASE_APP_ID; appid_token=':ios:'
+      die "iOS is not yet supported (out of scope for now; see APPENDIX.md#build-setup-android)"
+      ;;
+  esac
+
+  local app_id email key
+  app_id="${!appid_var:-}"
+  email="${CH_BUILD_FIREBASE_CLIENT_EMAIL:-}"
+  key="${CH_BUILD_FIREBASE_PRIVATE_KEY:-}"
+  [ -n "$app_id" ] || die "$appid_var is required (the $platform app id; try --help)"
+  [ -n "$email" ]  || die "CH_BUILD_FIREBASE_CLIENT_EMAIL is required (try --help)"
+  [ -n "$key" ]    || die "CH_BUILD_FIREBASE_PRIVATE_KEY is required (try --help)"
+  case "$app_id" in
+    *"$appid_token"*) : ;;
+    *) die "$appid_var ($app_id) is not a $platform app id (expected it to contain $appid_token)" ;;
+  esac
+
+  local dest="${out:-$out_default}"
+
+  if [ "$dry_run" -ne 0 ]; then
+    log "[dry-run] would fetch $platform config for app $app_id -> $dest"
+    return 0
+  fi
+
+  local tool
+  for tool in curl jq openssl; do
+    command -v "$tool" >/dev/null 2>&1 || die "$tool not found (needed to fetch the Firebase config; it ships in the chrysalis image)"
+  done
+
+  local token resp b64 config
+  log "fetching $platform config for app $app_id"
+  token="$(mint_sa_token "$email" "$key")"
+
+  # projects/- resolves the app's own project from the app id, so no project id is needed.
+  resp="$(curl -sS -H "Authorization: Bearer ${token}" \
+    "https://firebase.googleapis.com/v1beta1/projects/-/${api_kind}/${app_id}/config")" \
+    || die "getConfig request to Firebase failed (network)"
+
+  b64="$(printf '%s' "$resp" | jq -r '.configFileContents // empty' 2>/dev/null || true)"
+  [ -n "$b64" ] || die "could not fetch the config: $(printf '%s' "$resp" | jq -r '.error.message // "unexpected response; check the app id and that the service account has firebase.clients.get"' 2>/dev/null || printf 'unparseable response')"
+  config="$(printf '%s' "$b64" | openssl base64 -d -A)" || die "failed to decode the config returned by Firebase"
+  [ -n "$config" ] || die "the config returned by Firebase was empty"
+
+  mkdir -p "$(dirname "$dest")"
+  printf '%s' "$config" > "$dest"
+  chmod 600 "$dest"
+  log "wrote $dest"
+}
+
+main "$@"

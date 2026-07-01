@@ -10,7 +10,10 @@
 #   - dart-defines:    one var per key, CH_BUILD_DEFINE_<KEY>=<value>, written verbatim as
 #                      <KEY>=<value> lines into the dart-define file. Pass that file to your
 #                      build:  flutter build apk --dart-define-from-file="$CH_BUILD_DART_DEFINE_FILE"
-#   - google-services: CH_BUILD_ANDROID_GOOGLE_SERVICES (the JSON) -> android/app/google-services.json
+#   - google-services: fetched from Firebase via ch-fetch-firebase-config, from
+#                      CH_BUILD_ANDROID_FIREBASE_APP_ID plus the shared
+#                      CH_BUILD_FIREBASE_CLIENT_EMAIL / _PRIVATE_KEY, into
+#                      android/app/google-services.json
 #   - dev signing:     a keystore (generated only when missing) + android/key.properties (written
 #                      only when absent), from the CH_BUILD_ANDROID_* knobs in the registry below.
 #
@@ -77,8 +80,13 @@ dart-defines (one variable per key; value written verbatim):
   CH_BUILD_DEFINE_<KEY>=<value>            ->  <KEY>=<value> in the dart-define file
   Then build with:  flutter build apk --dart-define-from-file="$CH_BUILD_DART_DEFINE_FILE"
 
-google-services (the whole JSON in one variable):
-  CH_BUILD_ANDROID_GOOGLE_SERVICES=<json>  ->  android/app/google-services.json
+google-services (fetched from Firebase via ch-fetch-firebase-config --android):
+  CH_BUILD_ANDROID_FIREBASE_APP_ID=<1:NN:android:XX>   the Android app to fetch config for
+  CH_BUILD_FIREBASE_CLIENT_EMAIL=<sa@proj...>          the service account (needs the
+                                                       firebase.clients.get IAM permission)
+  CH_BUILD_FIREBASE_PRIVATE_KEY=<pem>                  its private key (escaped \n or real
+                                                       newlines both accepted)
+  All three set -> android/app/google-services.json.
 
 Variables with defaults (override via the environment):
 EOF
@@ -121,15 +129,33 @@ setup_dart_defines() {
   printf '%s' "$out" | write_file "$file" "$dry_run"
 }
 
-# CH_BUILD_ANDROID_GOOGLE_SERVICES (the JSON blob) -> android/app/google-services.json.
+# Fetch android/app/google-services.json from Firebase by delegating to ch-fetch-firebase-config
+# --android (the shared fetcher; see APPENDIX.md#build-setup-android). With none of the Firebase
+# vars set this does nothing, so a committed google-services.json is left alone; otherwise the
+# fetcher validates them and fails fast on a partial set. The credential
+# (CH_BUILD_FIREBASE_CLIENT_EMAIL / _PRIVATE_KEY) is project-scoped and shared with the eventual
+# iOS setup; only CH_BUILD_ANDROID_FIREBASE_APP_ID is Android-specific.
 setup_google_services() {
   local dry_run="$1"
-  if [ -z "${CH_BUILD_ANDROID_GOOGLE_SERVICES:-}" ]; then
-    log "CH_BUILD_ANDROID_GOOGLE_SERVICES unset; skipping google-services.json"
+  if [ -z "${CH_BUILD_ANDROID_FIREBASE_APP_ID:-}" ] \
+    && [ -z "${CH_BUILD_FIREBASE_CLIENT_EMAIL:-}" ] \
+    && [ -z "${CH_BUILD_FIREBASE_PRIVATE_KEY:-}" ]; then
+    log "no Firebase vars set; skipping google-services.json"
     return 0
   fi
-  printf '%s' "$CH_BUILD_ANDROID_GOOGLE_SERVICES" \
-    | write_file android/app/google-services.json "$dry_run"
+
+  # Prefer the copy shipped beside this script; fall back to PATH (both are on PATH in the image).
+  local fetcher
+  fetcher="$(dirname "${BASH_SOURCE[0]}")/ch-fetch-firebase-config"
+  if [ ! -x "$fetcher" ]; then
+    command -v ch-fetch-firebase-config >/dev/null 2>&1 \
+      || die "ch-fetch-firebase-config not found (it ships alongside this helper in the chrysalis image)"
+    fetcher=ch-fetch-firebase-config
+  fi
+
+  local -a args=(--android)
+  if [ "$dry_run" -ne 0 ]; then args+=(--dry-run); fi
+  "$fetcher" "${args[@]}"
 }
 
 # Dev signing: keep an existing setup untouched, else generate-if-absent the keystore and
