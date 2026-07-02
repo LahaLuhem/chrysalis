@@ -45,6 +45,13 @@ commandTests:
       - '--android'
       - '--ios'
       - 'CH_BUILD_FIREBASE_CLIENT_EMAIL'
+  - name: ch-write-dart-defines runs (standalone dart-define writer)
+    command: ch-write-dart-defines
+    args: ['--help']
+    exitCode: 0
+    expectedOutput:
+      - 'CH_BUILD_DEFINE'
+      - '--out'
 
 # The image ships with telemetry off and Flutter's version-freshness check skipped, and bakes the
 # two published paths the build-env helper writes/reads (see the flutter Dockerfile): assert those

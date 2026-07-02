@@ -109,20 +109,27 @@ check_versions_env() {
   fi
 }
 
-# The two published paths live in two places: the flutter Dockerfile bakes them as ENV (so a build
-# job can reference them) and ch-build-setup-android's registry carries the same default (its
-# fallback when run outside the image). Assert they agree so the pair can't silently drift.
+# Each published path lives in two places: the flutter Dockerfile bakes it as ENV (so a build job
+# can reference it) and a helper carries the same default (its fallback outside the image).
+# CH_BUILD_DART_DEFINE_FILE's default is in ch-write-dart-defines (its ':-' fallback);
+# CH_BUILD_CACHE_KEYSTORE's is in ch-build-setup-android's registry. Assert each agrees with the
+# bake so they can't silently drift.
 check_ch_build_paths() {
-  local script='images/flutter/scripts/ch-build-setup-android' df='images/flutter/Dockerfile' var want got
-  for var in CH_BUILD_DART_DEFINE_FILE CH_BUILD_CACHE_KEYSTORE; do
-    want="$(grep -E "^$var\|" "$script" | head -1 | cut -d'|' -f2)"
-    got="$(grep -oE "$var=[^[:space:]]+" "$df" | head -1 | cut -d= -f2-)"
-    if [ -n "$want" ] && [ "$want" = "$got" ]; then
-      ok "$var agrees ($want)"
-    else
-      bad "$var drift: Dockerfile '$got' vs helper default '$want'"
-    fi
-  done
+  local df='images/flutter/Dockerfile' want got
+  want="$(grep -oE 'CH_BUILD_DART_DEFINE_FILE:-[^}]+' images/flutter/scripts/ch-write-dart-defines | head -1 | sed 's/.*:-//')"
+  got="$(grep -oE 'CH_BUILD_DART_DEFINE_FILE=[^[:space:]]+' "$df" | head -1 | cut -d= -f2-)"
+  if [ -n "$want" ] && [ "$want" = "$got" ]; then
+    ok "CH_BUILD_DART_DEFINE_FILE agrees ($want)"
+  else
+    bad "CH_BUILD_DART_DEFINE_FILE drift: Dockerfile '$got' vs ch-write-dart-defines '$want'"
+  fi
+  want="$(grep -E '^CH_BUILD_CACHE_KEYSTORE\|' images/flutter/scripts/ch-build-setup-android | head -1 | cut -d'|' -f2)"
+  got="$(grep -oE 'CH_BUILD_CACHE_KEYSTORE=[^[:space:]]+' "$df" | head -1 | cut -d= -f2-)"
+  if [ -n "$want" ] && [ "$want" = "$got" ]; then
+    ok "CH_BUILD_CACHE_KEYSTORE agrees ($want)"
+  else
+    bad "CH_BUILD_CACHE_KEYSTORE drift: Dockerfile '$got' vs ch-build-setup-android '$want'"
+  fi
 }
 
 run_lint() {
@@ -143,7 +150,7 @@ run_lint() {
   section 'versions.env sanity'
   check_versions_env
 
-  section 'ch-build-setup-android path consistency'
+  section 'build-env path consistency'
   check_ch_build_paths
 }
 
