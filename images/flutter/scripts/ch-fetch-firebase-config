@@ -63,6 +63,9 @@ b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
 normalize_private_key() {
   local key
   key="${1//\\n/$'\n'}"                       # literal \n -> real newlines
+  key="${key#"${key%%[![:space:]]*}"}"        # strip leading whitespace (e.g. a leading \n)
+  key="${key%"${key##*[![:space:]]}"}"        # strip trailing whitespace, so a wrapped bare body
+                                              # has no blank line breaking the PEM header/footer
   case "$key" in
     *'-----BEGIN'*) printf '%s' "$key"; return 0 ;;
   esac
