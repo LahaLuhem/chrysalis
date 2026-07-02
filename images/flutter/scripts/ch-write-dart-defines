@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+#
+# ch-write-dart-defines: write a Flutter --dart-define-from-file file from CH_BUILD_DEFINE_* vars.
+#
+# Reads every CH_BUILD_DEFINE_<KEY> environment variable and writes a verbatim <KEY>=<value> line
+# per entry into the dart-define file, which you then pass to your build:
+#
+#   flutter build apk --dart-define-from-file="$CH_BUILD_DART_DEFINE_FILE"
+#
+# Inert and vendor-agnostic (reads only env vars, assumes no CI system) and self-contained, so
+# besides running from the chrysalis image you can curl it from GitHub and run it on any runner
+# (e.g. a macOS iOS-build runner that wants the dart-defines without the Android setup). The output
+# is .env KEY=value format regardless of the file name; flutter picks JSON vs .env by content (a
+# leading '{'), not the extension, so a .env-format file named .json is still read correctly.
+#
+# requires: bash
+#
+# Usage: ch-write-dart-defines [--out FILE] [--dry-run] [--help]
+#
+set -euo pipefail
+
+log() { printf 'ch-write-dart-defines: %s\n' "$1" >&2; }
+die() { printf 'ch-write-dart-defines: error: %s\n' "$1" >&2; exit 1; }
+
+print_help() {
+  cat <<'EOF'
+ch-write-dart-defines: write a Flutter --dart-define-from-file file from CH_BUILD_DEFINE_* vars.
+
+Each CH_BUILD_DEFINE_<KEY>=<value> becomes a verbatim <KEY>=<value> line. With no CH_BUILD_DEFINE_*
+set it does nothing. Run from your project root (the default path is project-relative).
+
+  --out FILE       write here instead of $CH_BUILD_DART_DEFINE_FILE (default lib/env/dart_defines.env)
+  -n, --dry-run    show what would be written; write nothing
+  -h, --help       this help
+
+Then build with:  flutter build apk --dart-define-from-file="$CH_BUILD_DART_DEFINE_FILE"
+EOF
+}
+
+main() {
+  local out='' dry_run=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --out)        shift; [ $# -gt 0 ] || die "--out needs a path"; out="$1" ;;
+      -n|--dry-run) dry_run=1 ;;
+      -h|--help)    print_help; exit 0 ;;
+      --)           shift; break ;;
+      -*)           die "unknown option: $1 (try --help)" ;;
+      *)            die "unexpected argument: $1 (try --help)" ;;
+    esac
+    shift
+  done
+
+  local file="${out:-${CH_BUILD_DART_DEFINE_FILE:-lib/env/dart_defines.env}}"
+
+  # Prefix expansion: every set variable named CH_BUILD_DEFINE_*. Empty if none are set.
+  local -a names=("${!CH_BUILD_DEFINE_@}")
+  if [ "${#names[@]}" -eq 0 ]; then
+    log "no CH_BUILD_DEFINE_* set; skipping the dart-define file"
+    return 0
+  fi
+
+  local name key value content=''
+  local -a keys=()
+  for name in "${names[@]}"; do
+    key="${name#CH_BUILD_DEFINE_}"
+    value="${!name}"
+    case "$value" in
+      *$'\n'*) die "$name has a multi-line value; --dart-define-from-file does not support those" ;;
+    esac
+    content+="$key=$value"$'\n'
+    keys+=("$key")
+  done
+  log "dart-define (${#keys[@]}): ${keys[*]} -> $file"
+
+  if [ "$dry_run" -ne 0 ]; then
+    log "[dry-run] would write $file"
+    return 0
+  fi
+  mkdir -p "$(dirname "$file")"
+  printf '%s' "$content" > "$file"
+  chmod 600 "$file"
+  log "wrote $file"
+}
+
+main "$@"
