@@ -7,9 +7,9 @@
 # variables (so it assumes no particular CI system), and materializes only the files an Android
 # build needs from secrets a CI already holds:
 #
-#   - dart-defines:    one var per key, CH_BUILD_DEFINE_<KEY>=<value>, written verbatim as
-#                      <KEY>=<value> lines into the dart-define file. Pass that file to your
-#                      build:  flutter build apk --dart-define-from-file="$CH_BUILD_DART_DEFINE_FILE"
+#   - dart-defines:    written from CH_BUILD_DEFINE_<KEY> vars via ch-write-dart-defines, into the
+#                      dart-define file. Pass that file to your build:
+#                      flutter build apk --dart-define-from-file="$CH_BUILD_DART_DEFINE_FILE"
 #   - google-services: fetched from Firebase via ch-fetch-firebase-config, from
 #                      CH_BUILD_ANDROID_FIREBASE_APP_ID plus the shared
 #                      CH_BUILD_FIREBASE_CLIENT_EMAIL / _PRIVATE_KEY, into
@@ -29,10 +29,10 @@ die() { printf 'ch-build-setup-android: error: %s\n' "$1" >&2; exit 1; }
 
 # Single source of truth for the defaulted scalar vars: this block feeds both default
 # resolution and --help, so the two cannot drift. One per line, NAME|DEFAULT|DESCRIPTION
-# ('|' appears in neither field; the DNAME default carries commas but no pipe). The two path
-# vars are also baked as image ENVs; the default here is the fallback for running the helper
-# outside the image. CH_BUILD_DART_DEFINE_FILE is what you pass to --dart-define-from-file;
-# CH_BUILD_CACHE_KEYSTORE is the path to add to your build cache for a stable signing key.
+# ('|' appears in neither field; the DNAME default carries commas but no pipe). CH_BUILD_CACHE_KEYSTORE
+# is also baked as an image ENV (the default here is the fallback outside the image): the keystore
+# path to add to your build cache for a stable signing key. (The dart-define file path,
+# CH_BUILD_DART_DEFINE_FILE, lives in ch-write-dart-defines now.)
 readonly VAR_REGISTRY='
 CH_BUILD_ANDROID_KEYSTORE_PASSWORD|storepassword|PKCS12 keystore password (used for both the store and the key)
 CH_BUILD_ANDROID_KEY_ALIAS|development|Signing key alias
@@ -40,7 +40,6 @@ CH_BUILD_ANDROID_DNAME|CN=Chrysalis Build Setup, O=Chrysalis, C=US|Distinguished
 CH_BUILD_ANDROID_KEY_VALIDITY|10000|Generated cert validity in days
 CH_BUILD_ANDROID_KEY_SIZE|2048|Key size in bits
 CH_BUILD_ANDROID_KEY_ALG|RSA|Key algorithm
-CH_BUILD_DART_DEFINE_FILE|lib/env/dart_defines.env|Output path for --dart-define-from-file (baked image ENV)
 CH_BUILD_CACHE_KEYSTORE|android/app/ch-signing.p12|Keystore path; cache it for a stable signing key (baked image ENV)
 '
 
@@ -77,7 +76,7 @@ already exists. Run from the Flutter project root.
   -n, --dry-run   Show what would be written; write nothing.
   -h, --help      This help.
 
-dart-defines (one variable per key; value written verbatim):
+dart-defines (via ch-write-dart-defines; one variable per key, value written verbatim):
   CH_BUILD_DEFINE_<KEY>=<value>            ->  <KEY>=<value> in the dart-define file
   Then build with:  flutter build apk --dart-define-from-file="$CH_BUILD_DART_DEFINE_FILE"
 
@@ -106,28 +105,20 @@ Notes:
 EOF
 }
 
-# CH_BUILD_DEFINE_<KEY> vars -> verbatim <KEY>=<value> lines in the dart-define file.
+# Write the dart-define file by delegating to ch-write-dart-defines (the shared writer, also usable
+# standalone, e.g. on an iOS runner that wants the defines without the Android setup). It reads
+# CH_BUILD_DEFINE_* and CH_BUILD_DART_DEFINE_FILE itself, so only --dry-run is threaded through.
 setup_dart_defines() {
-  local dry_run="$1" file
-  file="$(defaulted CH_BUILD_DART_DEFINE_FILE)"
-  local -a names=("${!CH_BUILD_DEFINE_@}")
-  if [ "${#names[@]}" -eq 0 ]; then
-    log "no CH_BUILD_DEFINE_* set; skipping the dart-define file"
-    return 0
+  local dry_run="$1"
+  # Prefer the copy shipped beside this script; fall back to PATH (both are on PATH in the image).
+  local writer
+  writer="$(dirname "${BASH_SOURCE[0]}")/ch-write-dart-defines"
+  if [ ! -x "$writer" ]; then
+    command -v ch-write-dart-defines >/dev/null 2>&1 \
+      || die "ch-write-dart-defines not found (it ships alongside this helper in the chrysalis image)"
+    writer=ch-write-dart-defines
   fi
-  local name key value out=''
-  local -a keys=()
-  for name in "${names[@]}"; do
-    key="${name#CH_BUILD_DEFINE_}"
-    value="${!name}"
-    case "$value" in
-      *$'\n'*) die "$name has a multi-line value; --dart-define-from-file does not support those" ;;
-    esac
-    out+="$key=$value"$'\n'
-    keys+=("$key")
-  done
-  log "dart-define (${#keys[@]}): ${keys[*]} -> $file"
-  printf '%s' "$out" | write_file "$file" "$dry_run"
+  if [ "$dry_run" -ne 0 ]; then "$writer" --dry-run; else "$writer"; fi
 }
 
 # Fetch android/app/google-services.json from Firebase by delegating to ch-fetch-firebase-config
