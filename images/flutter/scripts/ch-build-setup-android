@@ -13,7 +13,7 @@
 #   - google-services: fetched from Firebase via ch-fetch-firebase-config, from
 #                      CH_BUILD_ANDROID_FIREBASE_APP_ID plus the shared
 #                      CH_BUILD_FIREBASE_CLIENT_EMAIL / _PRIVATE_KEY, into
-#                      android/app/google-services.json
+#                      android/app/google-services.json (only when that file is absent)
 #   - dev signing:     a keystore (generated only when missing) + android/key.properties (written
 #                      only when absent), from the CH_BUILD_ANDROID_* knobs in the registry below.
 #
@@ -103,6 +103,8 @@ Notes:
   - Android signing is set up only when android/key.properties is absent.
   - The keystore is created only when missing; cache CH_BUILD_CACHE_KEYSTORE to keep the
     signing key stable across runs (changing the password invalidates a cached keystore).
+  - google-services.json is fetched only when absent; run
+    ch-fetch-firebase-config --android --force to refresh it.
   - CH_BUILD_DART_DEFINE_FILE and CH_BUILD_CACHE_KEYSTORE are baked into the image.
 EOF
 }
@@ -125,10 +127,11 @@ setup_dart_defines() {
 
 # Fetch android/app/google-services.json from Firebase by delegating to ch-fetch-firebase-config
 # --android (the shared fetcher; see APPENDIX.md#build-setup-android). With none of the Firebase
-# vars set this does nothing, so a committed google-services.json is left alone; otherwise the
-# fetcher validates them and fails fast on a partial set. The credential
-# (CH_BUILD_FIREBASE_CLIENT_EMAIL / _PRIVATE_KEY) is project-scoped and shared with the eventual
-# iOS setup; only CH_BUILD_ANDROID_FIREBASE_APP_ID is Android-specific.
+# vars set this does nothing; with them set the fetcher validates them (failing fast on a partial
+# set) but leaves an existing google-services.json untouched, the way the signing lane keeps an
+# existing keystore. To refresh, run ch-fetch-firebase-config --android --force directly. The
+# credential (CH_BUILD_FIREBASE_CLIENT_EMAIL / _PRIVATE_KEY) is project-scoped and shared with the
+# eventual iOS setup; only CH_BUILD_ANDROID_FIREBASE_APP_ID is Android-specific.
 setup_google_services() {
   local dry_run="$1"
   if [ -z "${CH_BUILD_ANDROID_FIREBASE_APP_ID:-}" ] \

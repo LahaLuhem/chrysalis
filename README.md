@@ -124,7 +124,7 @@ unless you set their variables); **signing is always-on** (a get-going convenien
 | Lane | Runs when | Produces |
 | --- | --- | --- |
 | dart-defines | you set any `CH_BUILD_DEFINE_*` (0 or more) | the `--dart-define-from-file` file |
-| google-services | you set all three Firebase vars (none skips; a partial set errors) | `android/app/google-services.json` |
+| google-services | you set all three Firebase vars (none = skip, partial = error), unless `google-services.json` exists | `android/app/google-services.json` |
 | signing | always, unless `android/key.properties` already exists | a dev keystore + `android/key.properties` |
 
 Opt out of signing by committing your own `android/key.properties`; the helper never overwrites it.
@@ -175,8 +175,9 @@ The credential is project-scoped, so `CH_BUILD_FIREBASE_*` is shared across plat
 id is per-platform. Use the plain **App ID** from the Firebase console (`1:<num>:<platform>:<hash>`),
 not the *Encoded app ID* (`app-1-...`): the helper looks for the `:android:` / `:ios:` marker, so it
 rejects the encoded form. The credential plus the app id for the platform you fetch go together: set
-none and that step is skipped (a committed config is left in place); set some but not all and it
-fails fast.
+none and that step is skipped; set some but not all and it fails fast. If the config file already
+exists it's left untouched (so a committed one is kept and re-runs skip the fetch); pass `--force`
+to refresh it.
 
 The helper accepts the private key in several shapes, so you can use whichever your CI variable UI
 will store. Masked / whitespace-checked variables (GitLab) want a single line with no spaces, which
@@ -205,7 +206,8 @@ fetch is done by a small standalone helper, `ch-fetch-firebase-config`, that nee
 too (handy on a non-chrysalis runner, where you can fetch it straight from the repo):
 
 ```bash
-ch-fetch-firebase-config --android            # -> android/app/google-services.json
+ch-fetch-firebase-config --android            # -> android/app/google-services.json (skips if present)
+ch-fetch-firebase-config --android --force    # re-fetch even if the file already exists
 ch-fetch-firebase-config --android --dry-run  # show what it would do, fetch nothing
 ```
 
