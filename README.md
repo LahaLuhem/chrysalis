@@ -147,6 +147,12 @@ hardcoding a location:
 | `CH_BUILD_DART_DEFINE_FILE` | `lib/env/dart_defines.env` | pass to `--dart-define-from-file` |
 | `CH_BUILD_CACHE_KEYSTORE` | `android/app/ch-signing.p12` | add to your build job's cache to keep one signing key across runs |
 
+You can point `CH_BUILD_DART_DEFINE_FILE` at any path or name (e.g. `lib/env/env.dev.json`) and the
+helper writes there. The contents are always the `.env` `KEY=value` format, not JSON, but that's
+fine whatever you name it: `flutter build --dart-define-from-file` chooses JSON vs `.env` by the
+file's **content** (a leading `{`), not the extension, so a `.env`-format file called `.json` is
+still read correctly ([flutter_tools, the `startsWith('{')` check](https://github.com/flutter/flutter/blob/stable/packages/flutter_tools/lib/src/runner/flutter_command.dart#L1725)).
+
 ### Google Services (Firebase)
 
 Rather than pasting the whole `google-services.json` into a CI secret, the helper fetches it from

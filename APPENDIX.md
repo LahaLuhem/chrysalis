@@ -371,8 +371,10 @@ verified. A present manifest is not a verified build.
   nothing and needs no opt-in. Gating it on a required keystore password (so a no-vars run produces
   nothing too) is a possible later mode; the asymmetry is intentional, not an oversight.
 - **dart-defines need no invented format, and the file carries no "type".** Traced through stable
-  `flutter_tools` (`flutter_command.dart`): `--dart-define-from-file` content-sniffs JSON vs
-  `.env` by a leading `{`; the `.env` branch builds a `Map<String,String>` while the JSON branch
+  `flutter_tools`: [`extractDartDefineConfigJsonMap`](https://github.com/flutter/flutter/blob/stable/packages/flutter_tools/lib/src/runner/flutter_command.dart)
+  content-sniffs a `--dart-define-from-file` file as JSON vs `.env` by a leading `{`
+  (`configRaw.trim().startsWith('{')`), i.e. by **content, not the file extension**; the `.env`
+  branch builds a `Map<String,String>` while the JSON branch
   keeps typed values, but both are emitted as defines via `'$key=$value'` (`.toString()`). So
   `.env` `DEBUG=true` and JSON `{"DEBUG":true}` yield the *identical* define `DEBUG=true`; the
   Dart type is chosen at the read site (`String`/`bool`/`int.fromEnvironment`), not in the file.
