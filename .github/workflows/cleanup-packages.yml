@@ -8,8 +8,8 @@ name: Cleanup old package versions
 # versions are left alone, so flutter:stable, the per-version flutter:<x.y.z> tags, android-sdk:latest
 # and their per-arch children all survive; only untagged versions are in scope.
 #
-# It starts in dry-run, so it only logs what it WOULD delete. Review a run's output first, then flip
-# dry-run to false to actually prune. Deleting published versions is outward-facing.
+# This actively prunes (dry-run is off). Deleting published versions is outward-facing, so if you
+# want to preview a run, set dry-run to true first and it only logs what it WOULD delete.
 #
 # Longer-term fix: immutable per-build tags, so consumers pin a retained tag instead of a :latest
 # digest and cleanup needs no age/keep guards. Tracked separately.

@@ -20,6 +20,8 @@
 # Run it from your Flutter project root. Why these choices (verbatim per-key defines, the
 # read-site typing finding, generate-if-absent, the cache var): ../../APPENDIX.md#build-setup-android.
 #
+# requires: bash; keytool (JDK) for signing, curl/jq/openssl for the google-services fetch
+#
 # Usage: ch-build-setup-android [--dry-run] [--help]
 #
 set -euo pipefail
