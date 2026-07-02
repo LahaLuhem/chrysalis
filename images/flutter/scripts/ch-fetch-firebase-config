@@ -18,12 +18,13 @@
 #   CH_BUILD_IOS_FIREBASE_APP_ID       the iOS app id, read for --ios (1:NN:ios:XX)
 #
 # Run it from your Flutter project root; it writes the platform's standard path unless --out is
-# given. Why roll our own instead of the Firebase CLI, and the minimal IAM role:
-# ../../APPENDIX.md#build-setup-android.
+# given. If the destination already exists it is left untouched (pass --force to re-fetch), since
+# the fetch is a signed JWT plus two HTTPS calls against config that is stable per project. Why roll
+# our own instead of the Firebase CLI, and the minimal IAM role: ../../APPENDIX.md#build-setup-android.
 #
 # requires: bash, curl, jq, openssl
 #
-# Usage: ch-fetch-firebase-config (--android | --ios) [--out FILE] [--dry-run] [--help]
+# Usage: ch-fetch-firebase-config (--android | --ios) [--out FILE] [--force] [--dry-run] [--help]
 #
 set -euo pipefail
 
@@ -40,6 +41,7 @@ the apps getConfig API. Run from your Flutter project root.
   --android        fetch google-services.json    -> android/app/google-services.json
   --ios            fetch GoogleService-Info.plist -> ios/Runner/GoogleService-Info.plist
   --out FILE       write to FILE instead of the platform default
+  -f, --force      re-fetch even if the destination already exists (default: skip when present)
   -n, --dry-run    show what would be fetched/written; make no network call, write nothing
   -h, --help       this help
 
@@ -108,12 +110,13 @@ mint_sa_token() {
 }
 
 main() {
-  local platform='' out='' dry_run=0
+  local platform='' out='' force=0 dry_run=0
   while [ $# -gt 0 ]; do
     case "$1" in
       --android)    platform=android ;;
       --ios)        platform=ios ;;
       --out)        shift; [ $# -gt 0 ] || die "--out needs a path"; out="$1" ;;
+      -f|--force)   force=1 ;;
       -n|--dry-run) dry_run=1 ;;
       -h|--help)    print_help; exit 0 ;;
       --)           shift; break ;;
@@ -144,6 +147,22 @@ main() {
       ;;
   esac
 
+  local dest="${out:-$out_default}"
+
+  # Skip the fetch if the config is already there (unless --force): it is a signed JWT plus two
+  # HTTPS round-trips against config that is stable per project, so re-fetching over an existing
+  # file is wasted work. Checked before the credentials are read, so a rerun with the file already
+  # in place needs nothing else set. Mirrors the signing lane, which likewise leaves an existing
+  # setup untouched (see ch-build-setup-android).
+  if [ "$force" -eq 0 ] && [ -f "$dest" ]; then
+    if [ "$dry_run" -ne 0 ]; then
+      log "[dry-run] $dest exists; would leave it untouched (use --force to re-fetch)"
+    else
+      log "$dest exists; leaving it untouched (use --force to re-fetch)"
+    fi
+    return 0
+  fi
+
   local app_id email key
   app_id="${!appid_var:-}"
   email="${CH_BUILD_FIREBASE_CLIENT_EMAIL:-}"
@@ -155,8 +174,6 @@ main() {
     *"$appid_token"*) : ;;
     *) die "$appid_var ($app_id) is not a $platform app id (expected it to contain $appid_token)" ;;
   esac
-
-  local dest="${out:-$out_default}"
 
   if [ "$dry_run" -ne 0 ]; then
     log "[dry-run] would fetch $platform config for app $app_id -> $dest"

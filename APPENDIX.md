@@ -426,6 +426,18 @@ verified. A present manifest is not a verified build.
   `-----BEGIN PRIVATE KEY-----` header, so the helper reconstructs the PEM from a header-less body
   and decodes base64; whatever the form, it is normalised in-shell and piped to `openssl` through a
   process substitution, so it never lands on disk. `--dry-run` makes no network call.
+- **The fetch skips an existing config; the dart-define writer overwrites.** `ch-fetch-firebase-config`
+  leaves the destination alone when it already exists and re-fetches only with `--force`. The fetch
+  is a signed JWT plus two HTTPS round-trips against config that is stable per Firebase project, so
+  re-fetching over a file that is already there is wasted work (network and crypto, not just I/O),
+  and the check runs before the credentials are read, so a re-run with the file in place needs
+  nothing else set. This matches the signing lane, which likewise leaves an existing keystore and
+  `key.properties` untouched. `ch-write-dart-defines` deliberately does the opposite and always
+  writes: its input is the `CH_BUILD_DEFINE_*` environment, which is meant to change between builds
+  (a dev vs staging URL, a flag), so skipping when the file exists would silently keep stale defines
+  after you change one, and the output is a tiny local file with nothing to save by skipping. The
+  orchestrator inherits both (it calls the fetcher without `--force`), so a forced refresh is run
+  through `ch-fetch-firebase-config --android --force` directly.
 - **Keystore is generate-if-absent, with its path exposed for caching.** `keytool` mints a fresh
   random keypair on every run, so regenerating the keystore each job gives an *unstable* signing
   key no matter the password. The helper writes the keystore only when it is missing and publishes
