@@ -21,6 +21,8 @@
 # given. Why roll our own instead of the Firebase CLI, and the minimal IAM role:
 # ../../APPENDIX.md#build-setup-android.
 #
+# requires: bash, curl, jq, openssl
+#
 # Usage: ch-fetch-firebase-config (--android | --ios) [--out FILE] [--dry-run] [--help]
 #
 set -euo pipefail

@@ -381,7 +381,10 @@ verified. A present manifest is not a verified build.
   So the helper writes plain per-key `KEY=value` lines verbatim. The user quotes values that need
   it (flutter strips wrapping quotes, treats an unquoted trailing `#` as a comment, and rejects
   multi-line values). No delimiter to invent, no JSON to assemble, and no base64 by default
-  (base64 was only a CI-specific escaping workaround, not part of the general mechanism).
+  (base64 was only a CI-specific escaping workaround, not part of the general mechanism). The lane
+  lives in a standalone `ch-write-dart-defines` that `ch-build-setup-android` delegates to (parallel
+  to the fetcher extraction below), so a job that only needs the env file, e.g. an iOS build on a
+  macOS runner, can curl and run it alone, without the orchestrator's keytool/signing dependency.
 - **google-services is fetched from Firebase, not pasted as a blob.** An earlier
   `CH_BUILD_ANDROID_GOOGLE_SERVICES` (the whole `google-services.json` in one secret) was replaced,
   not complemented: the helper now fetches the config at build time from the Firebase Management

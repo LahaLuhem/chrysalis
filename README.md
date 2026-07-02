@@ -153,6 +153,11 @@ fine whatever you name it: `flutter build --dart-define-from-file` chooses JSON 
 file's **content** (a leading `{`), not the extension, so a `.env`-format file called `.json` is
 still read correctly ([flutter_tools, the `startsWith('{')` check](https://github.com/flutter/flutter/blob/stable/packages/flutter_tools/lib/src/runner/flutter_command.dart#L1725)).
 
+The dart-define lane is also a standalone helper, `ch-write-dart-defines` (bash only, nothing else),
+that `ch-build-setup-android` just calls. Run it on its own when you want the defines without the
+Android setup, for example on a macOS iOS-build runner: `ch-write-dart-defines` writes the env file
+and `ch-fetch-firebase-config --ios` writes the plist, with no keystore or signing involved.
+
 ### Google Services (Firebase)
 
 Rather than pasting the whole `google-services.json` into a CI secret, the helper fetches it from
