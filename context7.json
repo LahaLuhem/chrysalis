@@ -1,0 +1,17 @@
+{
+  "url": "https://context7.com/lahaluhem/chrysalis",
+  "public_key": "pk_zRQqaALefsVNkJ7uS6fVf",
+  "projectTitle": "chrysalis",
+  "description": "Multi-arch (amd64/arm64) Docker images with Flutter and the Android SDK baked in, tracking the latest stable Flutter, published to GHCR.",
+  "excludeFolders": [".ai", ".github", "images", "scripts"],
+  "excludeFiles": ["CODESTYLE.md"],
+  "rules": [
+    "Images live on GHCR: `ghcr.io/lahaluhem/flutter` (tags: `stable`, or an exact version like `3.44.4`) and `ghcr.io/lahaluhem/android-sdk` (tag: `latest`). The `flutter` image is built FROM `android-sdk`.",
+    "Every tag is a multi-arch manifest (linux/amd64 + linux/arm64); a plain `docker pull`/`docker run` picks the arch matching the host. Add `--platform linux/arm64` only to force one.",
+    "Typical use mounts the project and sets the workdir, e.g. `docker run --rm -it -v ${PWD}:/build -w /build ghcr.io/lahaluhem/flutter:stable flutter test`.",
+    "`flutter`/`dart`, `flutter test`, `flutter analyze`, `pub`, and web builds run natively on both arches. Only Android builds (`flutter build apk`/`appbundle`) on arm64 need x86 emulation.",
+    "To build Android on arm64, register x86 emulation on the host once with `docker run --privileged --rm tonistiigi/binfmt --install amd64`; builds then work, just slower.",
+    "Before `flutter build`, stage build secrets with the bundled `ch-build-setup-android` helper: it writes the `--dart-define-from-file` file, `android/app/google-services.json`, and a dev signing keystore from `CH_BUILD_*` env vars. Lanes are opt-in; `--help` lists variables and `--dry-run` previews.",
+    "Images are quiet by default (Flutter/Dart analytics off, version-update check skipped). Override with `-e BOT=false`."
+  ]
+}
