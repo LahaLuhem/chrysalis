@@ -146,7 +146,7 @@ jobs:
       - name: Docker metadata (labels + manifest annotations)
         id: meta
         if: inputs.push
-        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         with:
           images: ${{ env.REGISTRY }}/${{ inputs.name }}
           tags: ${{ steps.tagspecs.outputs.specs }}
@@ -235,7 +235,7 @@ jobs:
 
       - name: Docker metadata (index annotations)
         id: meta
-        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         with:
           images: ${{ env.REGISTRY }}/${{ inputs.name }}
           tags: ${{ steps.tagspecs.outputs.specs }}
