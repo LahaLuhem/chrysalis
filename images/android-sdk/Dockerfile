@@ -7,7 +7,7 @@
 #   Build toolchain  JDK + the Android SDK (everything below)
 #   Convenience (DX) jq, lcov, yq
 # The flutter image adds the Flutter layer on top.
-FROM ubuntu:26.04@sha256:53958ec7b67c2c9355df922dd08dbf0360611f8c3cdb656875e81873db9ffdba
+FROM ubuntu:26.04@sha256:3131b4cc82a783df6c9df078f86e01819a13594b865c2cad47bd1bca2b7063bb
 
 # OCI labels + annotations are workflow-owned (docker/metadata-action in build-image.yml),
 # not baked here. See APPENDIX.md#oci-native-images.
