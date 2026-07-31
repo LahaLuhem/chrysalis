@@ -243,6 +243,14 @@ verified. A present manifest is not a verified build.
   (`gh workflow run build_and_push.yml --ref <branch>`).
 - **Why not push on every branch:** concurrent branch builds would race on the same tags.
   Gating to `master` + explicit dispatch makes publishing intentional.
+- **Runs are further gated on image-affecting paths.** `prepare` classifies the changed files
+  (compare API for pushes, PR files API for pull requests) and skips the build jobs unless the
+  change touches `images/`, `versions.env`, `scripts/`, or the two build workflows. Anything else
+  (docs, `test.yml`, `.github/lint-tools.env`, `renovate.jsonc`) can't alter image bytes; before
+  this gate, such merges republished identical layers under fresh digests (the `created` label
+  changes every build), costing a full publish cycle plus registry churn each time. Manual
+  `workflow_dispatch` bypasses the gate, and any failure to list changed files fails open to
+  building, so the gate can only ever skip work, never a needed publish.
 - **Verification:** a publish is only "done" once `docker manifest inspect <ref>` shows both
   `linux/amd64` and `linux/arm64`. Never report success without it.
 
