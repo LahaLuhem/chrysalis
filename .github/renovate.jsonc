@@ -26,6 +26,12 @@
       "matchDepTypes": ["dev"],
       "labels": ["dev-dependencies"],
       "semanticCommitScope": "deps-dev"
+    },
+    {
+      "description": "Batch non-major action bumps into one PR; N separate PRs cost N serialized publishes. Majors stay separate for visibility.",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
+      "groupName": "CI workflow actions"
     }
   ],
 
