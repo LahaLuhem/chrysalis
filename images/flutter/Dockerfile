@@ -25,9 +25,9 @@ ENV FLUTTER_SUPPRESS_ANALYTICS=true \
 
 RUN git clone --depth 1 --branch ${FLUTTER_VERSION} https://github.com/flutter/flutter.git ${FLUTTER_HOME}
 
+# No chown here: the clone above already runs as root, so re-adding one would be a no-op.
 RUN yes | flutter doctor --android-licenses \
-    && flutter doctor \
-    && chown -R root:root ${FLUTTER_HOME}
+    && flutter doctor
 
 RUN flutter precache --android
 
