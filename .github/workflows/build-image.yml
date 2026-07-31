@@ -281,7 +281,9 @@ jobs:
 
       # A publish is only "done" when the pushed image carries both arches (hard rule 8) and uses
       # OCI media types end to end. assert_oci_registry.sh checks the index, both arches, and every
-      # manifest/config/layer; crane then validates the image is well-formed and pullable.
+      # manifest/config/layer; crane then validates the image is structurally well-formed. --fast
+      # skips re-downloading layer blobs (~6 GB/publish, half the pipeline's critical path); their
+      # digests are already verified by the registry on push and by every client on pull.
       - name: Verify the published image (OCI media types + crane validate)
         shell: bash
         env:
@@ -290,4 +292,4 @@ jobs:
         run: |
           first_tag="$(grep -m1 . <<< "$TAGS")"
           ./scripts/assert_oci_registry.sh "$IMAGE:$first_tag"
-          crane validate --remote "$IMAGE:$first_tag"
+          crane validate --fast --remote "$IMAGE:$first_tag"
