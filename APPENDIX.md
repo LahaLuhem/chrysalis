@@ -220,7 +220,9 @@ verified. A present manifest is not a verified build.
   fill in from the repo and the build commit.
 - **Two checks keep it honest.** On publish, the merge job runs
   [`scripts/assert_oci_registry.sh`](./scripts/assert_oci_registry.sh) (the index, both arches, and
-  every manifest, config, and layer) plus `crane validate` on the pushed image. At PR time the amd64
+  every manifest, config, and layer) plus `crane validate --fast` on the pushed image (structural
+  validation only: re-downloading every layer to re-hash it cost ~4.5 min per publish for bytes the
+  registry digest-checks on push and every client re-checks on pull). At PR time the amd64
   build leg runs [`scripts/assert_oci_layout.sh`](./scripts/assert_oci_layout.sh) against a `type=oci`
   build, so a regression to Docker media types fails before it can publish.
 - **Why not bake `LABEL`s in the Dockerfile?** One source avoids drift (a label edited in one
