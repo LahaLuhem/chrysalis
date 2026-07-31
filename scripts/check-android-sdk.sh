@@ -1,32 +1,33 @@
 #!/usr/bin/env bash
 #
-# Check whether the Android SDK pins in images/android-sdk/Dockerfile are behind the
-# latest stable packages Google publishes. build-tools and the platform (compileSdk)
-# are compared against Google's repository manifest, the same source sdkmanager installs
-# from. cmdline-tools is pinned by an opaque build number rather than a version, so it's
-# out of scope here and bumped by hand.
+# Check whether the Android SDK platform pin (compileSdk) in images/android-sdk/Dockerfile is
+# behind the latest stable platform in Google's repository manifest, the same source
+# sdkmanager installs from. Two pins stay out of scope: cmdline-tools, pinned by an opaque
+# build number rather than a version, and build-tools.
 #
-# build-tools are capped at the newest stable platform's generation: a generation can ship
-# stable before its platform does (37.0.0 landed while API 37 was still android-CANARY),
-# and build-tools ahead of the platform we install buy nothing.
+# build-tools deliberately does NOT track the manifest. AGP requests a specific revision and
+# downloads it mid-build when it's absent, so the pin's only job is to match that request and
+# keep consumer builds hermetic. Flutter 3.44.8 ships AGP 9.0.1, which wants 36.0.0, so
+# pinning the manifest's newest (36.1.0, or 37.0.0) would just make every consumer build
+# fetch 36.0.0 anyway. Bump it when Flutter's AGP moves, verified with `scripts/test.sh apk`.
 #
 # Renovate can't track these (its customDatasource doesn't parse the manifest XML, and
 # Google's HTML pages lag or pre-announce packages that aren't installable yet), so this
 # stands in for a Renovate "update available" PR. The weekly android-sdk-freshness
 # workflow runs it and opens an issue on drift; it also runs fine locally.
 #
-# Exit 0 = ran fine (drift, if any, is in the output and $GITHUB_OUTPUT); exit 2 =
-# couldn't fetch or parse (e.g. Google moved the manifest URL). It never reports "up to
+# Exit 0 = ran fine (drift, if any, is in the output and $GITHUB_OUTPUT); exit 2 = couldn't
+# fetch or parse, or the manifest revision we read has gone stale. It never reports "up to
 # date" on failure, so a broken check is visible rather than silent.
 #
 # Usage: scripts/check-android-sdk.sh
 #
 set -euo pipefail
 
-# Google's repository manifest (what sdkmanager reads). Revisions are additive and stay
-# live in parallel (2-1..2-4 all serve today) so old clients keep working, which means a
-# retired revision would go stale silently rather than 404. 2-4 currently carries the same
-# package set as 2-3, differing only in preview metadata we don't read.
+# Google's repository manifest (what sdkmanager reads). Revisions are additive and stay live
+# in parallel (2-1..2-4 all serve today) so old clients keep working; the staleness probe
+# below is what catches this one being retired. 2-4 currently carries the same package set,
+# differing only in preview metadata we don't read, so there's nothing to gain by moving.
 manifest_url='https://dl.google.com/android/repository/repository2-3.xml'
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -42,37 +43,58 @@ fi
 
 die() { printf '%serror:%s %s\n' "$red" "$rst" "$1" >&2; exit 2; }
 
-# newer <a> <b>: true when <b> is a strictly newer version than <a>.
-newer() { [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -1)" = "$2" ]; }
-
 status() { if [ "$1" = true ]; then printf '%sbehind%s' "$ylw" "$rst"; else printf '%sok%s' "$grn" "$rst"; fi; }
+
+# Package extraction from a manifest. build-tools are "build-tools;X.Y.Z"; platforms are
+# "platforms;android-NN" (numeric, so codename previews like android-CANARY are excluded by
+# construction).
+build_tools_of() {
+  printf '%s' "$1" | grep -oE 'path="build-tools;[0-9]+\.[0-9]+\.[0-9]+"' \
+    | sed -E 's/.*build-tools;//; s/"$//' | sort -uV || true
+}
+latest_platform_of() {
+  printf '%s' "$1" | grep -oE 'path="platforms;android-[0-9]+"' \
+    | sed -E 's/.*android-//; s/"$//' | sort -un | tail -1 || true
+}
 
 command -v curl >/dev/null 2>&1 || die 'curl is required'
 
 # --- Latest stable, from the manifest -------------------------------------------------
-# build-tools are "build-tools;X.Y.Z"; platforms are "platforms;android-NN" (numeric, so
-# codename previews like android-CANARY are excluded by construction). The platform is read
-# first because it sets the generation cap for build-tools below.
 if ! xml="$(curl -fsSL "$manifest_url")"; then
   die "could not fetch $manifest_url"
 fi
 
-latest_pl="$(printf '%s' "$xml" \
-  | grep -oE 'path="platforms;android-[0-9]+"' \
-  | sed -E 's/.*android-//; s/"$//' | sort -un | tail -1 || true)"
-all_bt="$(printf '%s' "$xml" \
-  | grep -oE 'path="build-tools;[0-9]+\.[0-9]+\.[0-9]+"' \
-  | sed -E 's/.*build-tools;//; s/"$//' | sort -uV || true)"
+latest_pl="$(latest_platform_of "$xml")"
+newest_bt="$(build_tools_of "$xml" | tail -1)"
 
-[ -n "$all_bt" ] || die "no build-tools found in the manifest (did its format change?)"
+[ -n "$newest_bt" ] || die "no build-tools found in the manifest (did its format change?)"
 [ -n "$latest_pl" ] || die "no platforms found in the manifest (did its format change?)"
 
-# Cap at the platform generation (see the header). newest_bt is kept only to report what
-# is being held back, so a capped result doesn't read as a stale check.
-newest_bt="$(printf '%s\n' "$all_bt" | tail -1)"
-latest_bt="$(printf '%s\n' "$all_bt" | awk -F. -v max="$latest_pl" '$1 <= max' | tail -1)"
+# --- Is the revision we read still being fed? -----------------------------------------
+# Revisions are additive and served in parallel, so a retired one goes stale silently instead
+# of 404ing. Probe upward from the one we read and compare the newest package each advertises.
+# build-tools is in that comparison purely as a staleness canary (its revisions land far more
+# often than platforms do), not because anything is pinned against it.
+rev="${manifest_url##*repository2-}"; rev="${rev%.xml}"
+case "$rev" in '' | *[!0-9]*) die "manifest_url must look like .../repository2-N.xml" ;; esac
 
-[ -n "$latest_bt" ] || die "no build-tools at or below android-$latest_pl (newest is $newest_bt)"
+probe="$rev"; newer_url=''
+while [ "$((probe - rev))" -lt 6 ]; do
+  probe=$((probe + 1))
+  candidate="${manifest_url%repository2-*.xml}repository2-${probe}.xml"
+  curl -fsIL -o /dev/null "$candidate" 2>/dev/null || break
+  newer_url="$candidate"
+done
+
+if [ -n "$newer_url" ]; then
+  newer_xml="$(curl -fsSL "$newer_url")" \
+    || die "$newer_url serves but could not be fetched to compare against"
+  newer_rev_bt="$(build_tools_of "$newer_xml" | tail -1)"
+  newer_rev_pl="$(latest_platform_of "$newer_xml")"
+  if [ "$newer_rev_bt" != "$newest_bt" ] || [ "$newer_rev_pl" != "$latest_pl" ]; then
+    die "$manifest_url is stale: $newer_url has build-tools $newer_rev_bt / android-$newer_rev_pl, we read $newest_bt / android-$latest_pl. Point manifest_url at the newer revision."
+  fi
+fi
 
 # --- Pinned, from the Dockerfile ------------------------------------------------------
 # Matched by var name so grouping the ENV lines later doesn't break the read.
@@ -83,26 +105,17 @@ pinned_pl="$(grep -oE 'ANDROID_PLATFORM_VERSION=[0-9]+' "$dockerfile" | head -1 
 [ -n "$pinned_pl" ] || die "ANDROID_PLATFORM_VERSION not found in $dockerfile"
 
 # --- Compare --------------------------------------------------------------------------
-bt_behind=false; pl_behind=false
-if newer "$pinned_bt" "$latest_bt"; then bt_behind=true; fi
+pl_behind=false
 if [ "$pinned_pl" -lt "$latest_pl" ]; then pl_behind=true; fi
 
 printf '%sAndroid SDK pins vs %s%s\n' "$bold" "$manifest_url" "$rst"
-printf '  build-tools    pinned %-11s latest %-11s %s\n' "$pinned_bt" "$latest_bt" "$(status "$bt_behind")"
-if [ "$newest_bt" != "$latest_bt" ]; then
-  printf '                 %s is newer but held back until android-%s is stable\n' \
-    "$newest_bt" "${newest_bt%%.*}"
-fi
 printf '  platform       pinned %-11s latest %-11s %s\n' "android-$pinned_pl" "android-$latest_pl" "$(status "$pl_behind")"
+printf '  build-tools    pinned %-11s follows AGP, not the manifest (newest there: %s)\n' "$pinned_bt" "$newest_bt"
 printf '  cmdline-tools  pinned by build number, checked manually\n'
 
 # --- Verdict --------------------------------------------------------------------------
 tick='`'
 behind=false; details=''
-if [ "$bt_behind" = true ]; then
-  behind=true
-  details="${details}- build-tools: ${tick}${pinned_bt}${tick} -> ${tick}${latest_bt}${tick}"$'\n'
-fi
 if [ "$pl_behind" = true ]; then
   behind=true
   details="${details}- platform: ${tick}android-${pinned_pl}${tick} -> ${tick}android-${latest_pl}${tick}"$'\n'

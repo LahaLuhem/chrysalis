@@ -120,6 +120,17 @@ chrysalis/
     saying "go ahead") greenlights the **first** sub-task only, not the whole plan run
     end-to-end. Keep pausing between every step until the user explicitly says to stop. Never
     one-shot a multi-step change.
+11. **`build-tools` follows AGP's request, NOT the newest in Google's manifest.** AGP picks the
+    build-tools revision it wants and downloads it mid-build when absent, so the pin's only job
+    is to match that request and keep consumer builds hermetic. Flutter 3.44.8 ships AGP 9.0.1,
+    which wants `36.0.0`; pinning the manifest's newest (`36.1.0`, `37.0.0`) leaves the baked
+    copy unused and makes every consumer build fetch `36.0.0` anyway. Bump it when Flutter's AGP
+    moves, and prove it with `scripts/test.sh apk`: the log must show **no** "Installing Android
+    SDK Build-Tools" line. The `platform` pin does track the manifest (it follows Flutter's
+    `compileSdkVersion`, `flutter_tools/lib/src/android/gradle_utils.dart`), and that is the only
+    pin `scripts/check-android-sdk.sh` compares; it also fails if the manifest revision it reads
+    goes stale. The weekly `android-sdk-freshness` workflow files the tracking issue; bumps stay
+    manual (verify-before-pin, rule 7).
 
 ## Build & publish flow
 
@@ -140,6 +151,10 @@ chrysalis/
 - `scripts/test.sh image` builds `android-sdk` + `flutter` for the host arch and asserts
   their contents with [container-structure-test](https://github.com/GoogleContainerTools/container-structure-test)
   (specs in `images/<name>/structure-test.yaml`), plus a version match and the arm64 emulator invariant.
+- `scripts/test.sh apk` builds a debug APK from a throwaway app in the `flutter` image, proving
+  the Android toolchain works end to end (arm64 runs it under x86-64 emulation). It is also how
+  the `build-tools` pin is verified against AGP (rule 11): an `Installing Android SDK
+  Build-Tools` line in the output means the pin is wrong. Slow and opt-in, not part of `all`.
 - `scripts/test.sh multiarch` builds `android-sdk` for amd64 + arm64 (amd64 emulated) and
   asserts the resulting manifest carries both arches. Slow and opt-in, not part of `all`.
 - `scripts/test.sh all` runs lint + image.
