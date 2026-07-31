@@ -5,8 +5,11 @@
 - [arm64 Linux builds Android only under x86-64 emulation](#arm64-android-build-limitation)
 - [Flutter is installed by `git clone`, not the release tarball](#flutter-clone-not-tarball)
 - [Multi-arch via native matrix + push-by-digest + manifest merge](#digest-merge-multiarch)
+- [OCI-native images](#oci-native-images)
 - [Publishing is gated to `master` and manual dispatch](#publish-gating)
 - [Version tracking via Renovate, not a bespoke cron](#renovate-version-tracking)
+- [Renovate automerges the boring tier, gated on one stable check](#renovate-automerge)
+- [`build-tools` is baked to match AGP; the NDK and CMake are deliberately not](#ndk-cmake-not-baked)
 - [Quiet-by-default: telemetry off, version check skipped](#quiet-ci-defaults)
 - [DX CLIs are compiled to native binaries, not `pub global activate`](#dx-tools-native)
 - [Build-env setup helpers: `ch-build-setup-android` + `ch-fetch-firebase-config`](#build-setup-android)
@@ -286,22 +289,65 @@ verified. A present manifest is not a verified build.
   Renovate pins the manifest-list digest.
 - **Cadence:** weekly (`schedule:weekly`), down from the old every-2h cron. Stable Flutter ships
   roughly quarterly, so frequent polling was wasteful.
-- **CI lint tools:** hadolint and actionlint are pinned the same way. Their versions live as
-  `# renovate:`-marked env vars in `.github/workflows/test.yml`, tracked by a second
-  `customManagers` entry via the `github-releases` datasource. The install step downloads the exact
-  release asset, verifies it against the publisher's `.sha256` / `checksums.txt`, then installs.
-  This replaced a step that curled `latest` hadolint and ran `download-actionlint.bash` from
-  `main`: unpinned, and a corrupt download once slipped through as a valid-looking HTTP 200 and
-  broke a run. Pinning plus checksum verification closes both the supply-chain gap and that flake.
+- **CI lint tools:** all four linters (hadolint, actionlint, shellcheck, biome) plus
+  `container-structure-test` come from one image, [Linterpol](https://github.com/LahaLuhem/linterpol),
+  pinned as `LINTERPOL_IMAGE` in [`.github/lint-tools.env`](./.github/lint-tools.env) and tracked by a
+  `customManagers` entry on the `docker` datasource. It follows Linterpol's `1` major line and is
+  digest-pinned, so the registry verifies the bytes on pull and there is no install step to get wrong.
+  Both `scripts/test.sh` and the `build-image.yml` structure-test step read that pin. It replaced
+  per-tool installs that curled `latest` hadolint and ran `download-actionlint.bash` from `main`:
+  unpinned, and a corrupt download once slipped through as a valid-looking HTTP 200 and broke a run.
 - **Why not lint Actions:** the standard alternative is official Actions like
-  `hadolint/hadolint-action`, which `best-practices` would SHA-pin automatically. We pin in the
-  workflow instead because `scripts/test.sh lint` is the single source of lint truth, run
-  identically locally and in CI, and it invokes `hadolint` / `actionlint` as binaries on `PATH`.
-  Pinning the versions in the workflow keeps CI installing the *same* tools `test.sh` runs. A lint
-  Action runs the tool its own way, which would either split CI from `test.sh` or force us to
-  reconcile the Action's pinned version with whatever `test.sh` installs locally. One coherent
-  system beats two kept in sync, and it reuses the custom-manager + `github-releases` mechanism
-  already in place for Flutter.
+  `hadolint/hadolint-action`, which `best-practices` would SHA-pin automatically. We use the image
+  instead because `scripts/test.sh lint` is the single source of lint truth, and it runs every linter
+  inside the Linterpol container, so a local run and a CI run execute the same bytes rather than
+  merely the same version number. A lint Action runs the tool its own way, which would either split
+  CI from `test.sh` or force us to reconcile the Action's pin with whatever the image carries. One
+  coherent system beats two kept in sync, and it keeps the linters off the host: `lint` needs nothing
+  but Docker.
+
+---
+
+<a id="renovate-automerge"></a>
+## Renovate automerges the boring tier, gated on one stable check
+
+- **Decision:** Renovate automerges `digest`, `pin`, `pinDigest`, and `patch` updates via GitHub's
+  native auto-merge (`platformAutomerge`, `automergeStrategy: "rebase"`). `minor` and `major` still
+  come to a human. Config: [`.github/renovate.jsonc`](./.github/renovate.jsonc).
+- **Why:** hand-merging a weekly digest re-pin is toil with no judgement in it. Copied from the
+  sibling [`linterpol`](https://github.com/LahaLuhem/linterpol) repo, with one difference that
+  matters (next bullet).
+- **Merging here publishes** ([#publish-gating](#publish-gating)), so automerge is auto-publishing.
+  linterpol's isn't: a bare semver tag publishes there, not a push to `main`. It's still safe here
+  because `build-image.yml` structure-tests both arches *before* it pushes, and the manifest merge
+  only runs once both legs pass. A bad bump costs a red `master`, never a bad tag.
+- **Why `minor` and `major` stay manual:** a Flutter minor can move the toolchain under every
+  consumer, and the `flutter` image is never built on pull requests (it needs the pushed
+  `android-sdk` base), so nothing validates it before the publish run.
+- **`images-ok` exists because the reusable-call check names aren't stable.** `android-sdk` and
+  `flutter` are `workflow_call` jobs, so the contexts they report depend on the path gate:
+  `android-sdk` (skipped) on a docs-only PR, but `android-sdk / build (linux/amd64)`,
+  `android-sdk / build (linux/arm64)`, and `android-sdk / merge` when it runs. A ruleset can only
+  name fixed contexts, so requiring either spelling blocks every PR that reports the other.
+  `images-ok` in [`build_and_push.yml`](./.github/workflows/build_and_push.yml) `needs` all three
+  jobs with `if: always()` and fails only on `failure` or `cancelled`, so it reports under one name
+  on every PR and is green when the gate skipped the build.
+- **The ruleset is load-bearing, not decoration.** GitHub auto-merge waits only on *required*
+  checks and ignores failing ones that aren't required, so automerge with nothing required would
+  merge broken builds; Renovate's own docs warn about exactly this. `master`'s ruleset requires
+  `lint` and `images-ok` and nothing else. Renaming either job silently un-gates automerge, which
+  is why that's a hard rule and not a comment.
+- **`automergeStrategy: "rebase"`** because the ruleset requires linear history, so the platform
+  default (a merge commit) would be rejected. It also needs "Allow rebase merging" enabled on the
+  repo: with it off, GitHub refuses the auto-merge call and Renovate falls back to its own
+  automerge, which merges on its own reading of branch status rather than the ruleset's.
+- **Rejected: building `flutter` on pull requests** to close the validation gap above. It would
+  have to build `FROM` the already-published `android-sdk:latest`, so on a PR that also changes
+  `android-sdk` it would validate against the wrong base and still report a pass. False confidence
+  is worse than a known gap.
+- **Rejected: decoupling publish from merge** (publish on a tag, as linterpol does). That would
+  make automerge trivially safe, but this repo exists to republish when Flutter moves, so it would
+  only relocate the manual step from merging the PR to cutting the tag.
 
 ---
 
