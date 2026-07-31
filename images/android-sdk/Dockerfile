@@ -27,18 +27,21 @@ ENV ANDROID_SDK_TOOLS_VERSION=13114758
 # --- Build toolchain: system packages --------------------------------------
 # JDK + the deps to fetch and build with the Android SDK. jq and lcov are the
 # Convenience (DX) tools (see "What's in the image" in the README).
+# Headless JDK: Android/Gradle builds need no GUI libs (AWT runs headless); the full
+# JDK's recommends add ~500 MB. No build-essential: the NDK bundles its own toolchain,
+# so nothing here invokes host gcc/make.
 RUN apt-get update \
-    && apt-get install -y openjdk-21-jdk \
+    && apt-get install -y openjdk-21-jdk-headless --no-install-recommends \
     # openssl signs the OAuth2 JWT for the ch-fetch-firebase-config helper (which also uses curl + jq)
-    && apt-get install -y sudo wget zip unzip git openssh-client curl openssl build-essential libstdc++6 locales --no-install-recommends \
+    && apt-get install -y sudo wget zip unzip git openssh-client curl openssl libstdc++6 locales --no-install-recommends \
     # Convenience (DX): jq (JSON), lcov (coverage reports)
     && apt-get install -y jq lcov --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # JAVA_HOME for the JDK installed above. TARGETARCH (amd64/arm64) is set by Buildx and
 # matches Ubuntu's /usr/lib/jvm/java-21-openjdk-<arch> layout; the "21" mirrors the
-# openjdk-21-jdk pin above. Tools that read JAVA_HOME (Gradle, flutter doctor) then resolve
-# the JDK deterministically instead of guessing via PATH.
+# openjdk-21-jdk-headless pin above. Tools that read JAVA_HOME (Gradle, flutter doctor)
+# then resolve the JDK deterministically instead of guessing via PATH.
 ARG TARGETARCH
 ENV JAVA_HOME=/usr/lib/jvm/java-21-openjdk-${TARGETARCH}
 
