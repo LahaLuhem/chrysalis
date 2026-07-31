@@ -6,6 +6,10 @@
 # from. cmdline-tools is pinned by an opaque build number rather than a version, so it's
 # out of scope here and bumped by hand.
 #
+# build-tools are capped at the newest stable platform's generation: a generation can ship
+# stable before its platform does (37.0.0 landed while API 37 was still android-CANARY),
+# and build-tools ahead of the platform we install buy nothing.
+#
 # Renovate can't track these (its customDatasource doesn't parse the manifest XML, and
 # Google's HTML pages lag or pre-announce packages that aren't installable yet), so this
 # stands in for a Renovate "update available" PR. The weekly android-sdk-freshness
@@ -19,9 +23,10 @@
 #
 set -euo pipefail
 
-# Google's current repository manifest (what sdkmanager reads). If Google bumps this to
-# repository2-4.xml the fetch 404s and we exit 2 (a failed run), rather than trusting a
-# frozen file.
+# Google's repository manifest (what sdkmanager reads). Revisions are additive and stay
+# live in parallel (2-1..2-4 all serve today) so old clients keep working, which means a
+# retired revision would go stale silently rather than 404. 2-4 currently carries the same
+# package set as 2-3, differing only in preview metadata we don't read.
 manifest_url='https://dl.google.com/android/repository/repository2-3.xml'
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -46,20 +51,28 @@ command -v curl >/dev/null 2>&1 || die 'curl is required'
 
 # --- Latest stable, from the manifest -------------------------------------------------
 # build-tools are "build-tools;X.Y.Z"; platforms are "platforms;android-NN" (numeric, so
-# codename previews like android-Baklava are excluded by construction).
+# codename previews like android-CANARY are excluded by construction). The platform is read
+# first because it sets the generation cap for build-tools below.
 if ! xml="$(curl -fsSL "$manifest_url")"; then
   die "could not fetch $manifest_url"
 fi
 
-latest_bt="$(printf '%s' "$xml" \
-  | grep -oE 'path="build-tools;[0-9]+\.[0-9]+\.[0-9]+"' \
-  | sed -E 's/.*build-tools;//; s/"$//' | sort -uV | tail -1 || true)"
 latest_pl="$(printf '%s' "$xml" \
   | grep -oE 'path="platforms;android-[0-9]+"' \
   | sed -E 's/.*android-//; s/"$//' | sort -un | tail -1 || true)"
+all_bt="$(printf '%s' "$xml" \
+  | grep -oE 'path="build-tools;[0-9]+\.[0-9]+\.[0-9]+"' \
+  | sed -E 's/.*build-tools;//; s/"$//' | sort -uV || true)"
 
-[ -n "$latest_bt" ] || die "no build-tools found in the manifest (did its format change?)"
+[ -n "$all_bt" ] || die "no build-tools found in the manifest (did its format change?)"
 [ -n "$latest_pl" ] || die "no platforms found in the manifest (did its format change?)"
+
+# Cap at the platform generation (see the header). newest_bt is kept only to report what
+# is being held back, so a capped result doesn't read as a stale check.
+newest_bt="$(printf '%s\n' "$all_bt" | tail -1)"
+latest_bt="$(printf '%s\n' "$all_bt" | awk -F. -v max="$latest_pl" '$1 <= max' | tail -1)"
+
+[ -n "$latest_bt" ] || die "no build-tools at or below android-$latest_pl (newest is $newest_bt)"
 
 # --- Pinned, from the Dockerfile ------------------------------------------------------
 # Matched by var name so grouping the ENV lines later doesn't break the read.
@@ -76,6 +89,10 @@ if [ "$pinned_pl" -lt "$latest_pl" ]; then pl_behind=true; fi
 
 printf '%sAndroid SDK pins vs %s%s\n' "$bold" "$manifest_url" "$rst"
 printf '  build-tools    pinned %-11s latest %-11s %s\n' "$pinned_bt" "$latest_bt" "$(status "$bt_behind")"
+if [ "$newest_bt" != "$latest_bt" ]; then
+  printf '                 %s is newer but held back until android-%s is stable\n' \
+    "$newest_bt" "${newest_bt%%.*}"
+fi
 printf '  platform       pinned %-11s latest %-11s %s\n' "android-$pinned_pl" "android-$latest_pl" "$(status "$pl_behind")"
 printf '  cmdline-tools  pinned by build number, checked manually\n'
 
