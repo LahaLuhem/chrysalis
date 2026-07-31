@@ -252,7 +252,8 @@ run_image() {
 }
 
 # Builds a debug APK from a throwaway app in the flutter image, proving the Android
-# toolchain works end to end (on arm64 the SDK build tools run under x86 emulation).
+# toolchain works end to end (on arm64 the SDK build tools run under x86 emulation), then
+# asserts AGP found the baked SDK packages instead of fetching its own.
 # Slow; opt-in, not part of `all`.
 run_apk() {
   if ! command -v docker >/dev/null 2>&1; then
@@ -260,6 +261,9 @@ run_apk() {
   fi
 
   build_host_images || return
+
+  local log built='' unexpected
+  log="$(mktemp)"
 
   section 'flutter build apk --debug (throwaway app)'
   # The $-expansions below run in the container's shell, not here, hence single quotes.
@@ -270,11 +274,31 @@ run_apk() {
         flutter create "$app" >/dev/null
         cd "$app"
         flutter build apk --debug
-        find build -name "*.apk" | grep -q .'; then
+        find build -name "*.apk" | grep -q .' 2>&1 | tee "$log"; then
     ok 'built a debug APK'
+    built=1
   else
     bad 'flutter build apk --debug'
   fi
+
+  # Anything Gradle installs mid-build is a pin the image should already have carried, so a
+  # consumer pays that download on every build while the baked layer goes unused (that is how
+  # a build-tools pin ahead of AGP's request was caught; AGENTS.md rule 11). The NDK and CMake
+  # are the deliberate exceptions: too large to bake for a benefit runner caching already gives.
+  section 'baked SDK covers AGP (no unexpected mid-build installs)'
+  if [ -z "$built" ]; then
+    skip 'build failed; nothing to assert about mid-build installs'
+  else
+    unexpected="$(grep -oE 'Installing [A-Za-z0-9 .()-]+ in /opt[^[:space:]]*' "$log" \
+      | grep -vE 'Installing (NDK|CMake)' || true)"
+    if [ -n "$unexpected" ]; then
+      bad "Gradle fetched what the image should bake:$(printf '\n         %s' "$unexpected")"
+    else
+      ok 'AGP used the baked SDK (only the un-baked NDK/CMake were fetched)'
+    fi
+  fi
+
+  rm -f "$log"
 }
 
 # Builds android-sdk for both arches into an OCI archive (no registry needed) and
