@@ -251,10 +251,9 @@ run_image() {
   fi
 }
 
-# Builds a debug APK from a throwaway app in the flutter image, proving the Android
-# toolchain works end to end (on arm64 the SDK build tools run under x86 emulation), then
-# asserts AGP found the baked SDK packages instead of fetching its own.
-# Slow; opt-in, not part of `all`.
+# Builds a debug APK from a throwaway app in the flutter image, proving the Android toolchain
+# works end to end (on arm64 the SDK build tools run under x86 emulation), then asserts AGP used
+# the baked SDK rather than fetching its own. Slow; opt-in, not part of `all`.
 run_apk() {
   if ! command -v docker >/dev/null 2>&1; then
     printf '%smissing tool:%s docker  (start OrbStack / Docker Desktop)\n' "$red" "$rst"; exit 2
@@ -281,10 +280,9 @@ run_apk() {
     bad 'flutter build apk --debug'
   fi
 
-  # Anything Gradle installs mid-build is a pin the image should already have carried, so a
-  # consumer pays that download on every build while the baked layer goes unused (that is how
-  # a build-tools pin ahead of AGP's request was caught; AGENTS.md rule 11). The NDK and CMake
-  # are the deliberate exceptions: too large to bake for a benefit runner caching already gives.
+  # A mid-build install means a pin drifted from what AGP asks for: the consumer pays that
+  # download every build while the baked layer sits unused. NDK/CMake are the deliberate
+  # exceptions (../APPENDIX.md#ndk-cmake-not-baked).
   section 'baked SDK covers AGP (no unexpected mid-build installs)'
   if [ -z "$built" ]; then
     skip 'build failed; nothing to assert about mid-build installs'

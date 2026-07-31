@@ -1,12 +1,10 @@
 name: Android SDK freshness
 
 # Weekly check that the Android SDK platform pin in images/android-sdk/Dockerfile is still the
-# latest stable platform in Google's manifest. Renovate can't track it: its customDatasource
-# can't parse the manifest XML, and the scrapeable HTML pages lag or pre-announce packages that
-# aren't installable yet. So this stands in for a Renovate "update available" PR: on drift it
-# opens (or updates) one tracking issue, and closes it once the pin catches up. The bump itself
-# stays manual (verify-before-pin). build-tools is deliberately out of scope here, since it
-# follows AGP's request rather than the manifest (AGENTS.md rule 11).
+# latest stable platform in Google's manifest. Renovate can't track it (its customDatasource
+# can't parse the manifest XML), so this stands in for a Renovate "update available" PR: on drift
+# it opens or updates one tracking issue, and closes it once the pin catches up. The bump stays
+# manual. build-tools is out of scope by design (AGENTS.md rule 11).
 # scripts/check-android-sdk.sh holds the logic and runs locally too.
 
 on:
@@ -48,7 +46,7 @@ jobs:
 
           if [ "$BEHIND" = "true" ]; then
             intro='The Android SDK platform pin is behind the latest stable platform in the upstream manifest:'
-            footer="Bump \`ANDROID_PLATFORM_VERSION\` in \`images/android-sdk/Dockerfile\`, verifying against the manifest first. Do NOT touch \`ANDROID_BUILD_TOOLS_VERSION\`: it follows AGP's request, not the manifest (AGENTS.md rule 11). Filed and maintained by the weekly \`android-sdk-freshness\` workflow, which updates this issue as the platform moves and closes it once the pin is current."
+            footer="Bump \`ANDROID_PLATFORM_VERSION\` in \`images/android-sdk/Dockerfile\`. Leave \`ANDROID_BUILD_TOOLS_VERSION\` alone: it follows AGP's request, not the manifest (AGENTS.md rule 11). Filed and maintained by the weekly \`android-sdk-freshness\` workflow, which closes this once the pin is current."
             body="$(printf '%s\n\n%s\n%s\n' "$intro" "$DETAILS" "$footer")"
             if [ -n "$existing" ]; then
               gh issue edit "$existing" --body "$body"

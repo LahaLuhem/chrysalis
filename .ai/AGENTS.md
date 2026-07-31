@@ -120,17 +120,12 @@ chrysalis/
     saying "go ahead") greenlights the **first** sub-task only, not the whole plan run
     end-to-end. Keep pausing between every step until the user explicitly says to stop. Never
     one-shot a multi-step change.
-11. **`build-tools` follows AGP's request, NOT the newest in Google's manifest.** AGP picks the
-    build-tools revision it wants and downloads it mid-build when absent, so the pin's only job
-    is to match that request and keep consumer builds hermetic. Flutter 3.44.8 ships AGP 9.0.1,
-    which wants `36.0.0`; pinning the manifest's newest (`36.1.0`, `37.0.0`) leaves the baked
-    copy unused and makes every consumer build fetch `36.0.0` anyway. Bump it when Flutter's AGP
-    moves, and prove it with `scripts/test.sh apk`: the log must show **no** "Installing Android
-    SDK Build-Tools" line. The `platform` pin does track the manifest (it follows Flutter's
-    `compileSdkVersion`, `flutter_tools/lib/src/android/gradle_utils.dart`), and that is the only
-    pin `scripts/check-android-sdk.sh` compares; it also fails if the manifest revision it reads
-    goes stale. The weekly `android-sdk-freshness` workflow files the tracking issue; bumps stay
-    manual (verify-before-pin, rule 7).
+11. **Only the `platform` pin tracks Google's manifest.** `build-tools` follows what AGP asks for
+    (a pin ahead of AGP's request goes unused while every consumer build fetches AGP's choice
+    anyway); the NDK and CMake are deliberately not baked at all, despite being fetched on every
+    build. Prove a `build-tools` bump with `scripts/test.sh apk`, which fails on any unexpected
+    mid-build install. Measured numbers, and why re-proposing the NDK bake needs new evidence:
+    [`APPENDIX.md#ndk-cmake-not-baked`](../APPENDIX.md#ndk-cmake-not-baked).
 
 ## Build & publish flow
 

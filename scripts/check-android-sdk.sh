@@ -1,33 +1,26 @@
 #!/usr/bin/env bash
 #
 # Check whether the Android SDK platform pin (compileSdk) in images/android-sdk/Dockerfile is
-# behind the latest stable platform in Google's repository manifest, the same source
-# sdkmanager installs from. Two pins stay out of scope: cmdline-tools, pinned by an opaque
-# build number rather than a version, and build-tools.
+# behind the latest stable platform in Google's repository manifest, the same source sdkmanager
+# installs from. The other two pins are out of scope by design: cmdline-tools is an opaque build
+# number, and build-tools follows AGP's request, not the manifest, so tracking it here would
+# actively mislead (../APPENDIX.md#ndk-cmake-not-baked).
 #
-# build-tools deliberately does NOT track the manifest. AGP requests a specific revision and
-# downloads it mid-build when it's absent, so the pin's only job is to match that request and
-# keep consumer builds hermetic. Flutter 3.44.8 ships AGP 9.0.1, which wants 36.0.0, so
-# pinning the manifest's newest (36.1.0, or 37.0.0) would just make every consumer build
-# fetch 36.0.0 anyway. Bump it when Flutter's AGP moves, verified with `scripts/test.sh apk`.
+# Renovate can't track this (its customDatasource doesn't parse the manifest XML, and Google's
+# HTML pages lag or pre-announce packages that aren't installable yet), so this stands in for a
+# Renovate "update available" PR. The weekly android-sdk-freshness workflow runs it and opens an
+# issue on drift; it also runs fine locally.
 #
-# Renovate can't track these (its customDatasource doesn't parse the manifest XML, and
-# Google's HTML pages lag or pre-announce packages that aren't installable yet), so this
-# stands in for a Renovate "update available" PR. The weekly android-sdk-freshness
-# workflow runs it and opens an issue on drift; it also runs fine locally.
-#
-# Exit 0 = ran fine (drift, if any, is in the output and $GITHUB_OUTPUT); exit 2 = couldn't
-# fetch or parse, or the manifest revision we read has gone stale. It never reports "up to
-# date" on failure, so a broken check is visible rather than silent.
+# Exit 0 = ran fine (drift, if any, is in the output and $GITHUB_OUTPUT); exit 2 = couldn't fetch
+# or parse, or the revision we read has gone stale, so a broken check never reads as "up to date".
 #
 # Usage: scripts/check-android-sdk.sh
 #
 set -euo pipefail
 
-# Google's repository manifest (what sdkmanager reads). Revisions are additive and stay live
-# in parallel (2-1..2-4 all serve today) so old clients keep working; the staleness probe
-# below is what catches this one being retired. 2-4 currently carries the same package set,
-# differing only in preview metadata we don't read, so there's nothing to gain by moving.
+# Google's repository manifest (what sdkmanager reads). Revisions are additive and served in
+# parallel (2-1..2-4 all live today), so a retired one goes stale silently rather than 404ing.
+# 2-4 adds only preview metadata we don't read, hence no reason to move.
 manifest_url='https://dl.google.com/android/repository/repository2-3.xml'
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -71,10 +64,9 @@ newest_bt="$(build_tools_of "$xml" | tail -1)"
 [ -n "$latest_pl" ] || die "no platforms found in the manifest (did its format change?)"
 
 # --- Is the revision we read still being fed? -----------------------------------------
-# Revisions are additive and served in parallel, so a retired one goes stale silently instead
-# of 404ing. Probe upward from the one we read and compare the newest package each advertises.
-# build-tools is in that comparison purely as a staleness canary (its revisions land far more
-# often than platforms do), not because anything is pinned against it.
+# Probe upward and compare the newest package each revision advertises. build-tools is in that
+# comparison purely as a canary (its revisions land far more often than platforms), not because
+# anything is pinned against it.
 rev="${manifest_url##*repository2-}"; rev="${rev%.xml}"
 case "$rev" in '' | *[!0-9]*) die "manifest_url must look like .../repository2-N.xml" ;; esac
 
