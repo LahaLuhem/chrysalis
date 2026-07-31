@@ -148,7 +148,8 @@ Run it before touching the Dockerfiles or the workflow. The lint tools (hadolint
 actionlint, shellcheck, biome) run from the [`Linterpol`](https://github.com/LahaLuhem/linterpol)
 image (`ghcr.io/lahaluhem/linterpol`, its own repo), which `test.sh` pulls on demand, so the
 tools need not be installed on the host and every run uses the same pinned versions. The
-default is digest-pinned and bumped by Renovate; override it with `LINTERPOL_IMAGE` (e.g. a
+default tracks Linterpol's `1` major line and is digest-pinned, so a run is reproducible while
+Renovate raises the digest bump per upstream release; override it with `LINTERPOL_IMAGE` (e.g. a
 local `linterpol:local` build). `container-structure-test` (used by the `image` target) runs
 from that same image too; since it inspects a built image, that step mounts the host's Docker
 socket into the container. Beyond Docker itself, the only host tool the suite still needs is
