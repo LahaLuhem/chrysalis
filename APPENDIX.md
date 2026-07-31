@@ -305,6 +305,41 @@ verified. A present manifest is not a verified build.
 
 ---
 
+<a id="ndk-cmake-not-baked"></a>
+## `build-tools` is baked to match AGP; the NDK and CMake are deliberately not
+
+- **Decision:** bake the `build-tools` revision **AGP asks for**; do **not** bake the NDK or CMake,
+  even though a bare `flutter build apk --debug` fetches both mid-build. So
+  `scripts/check-android-sdk.sh` tracks only the platform against Google's manifest.
+- **Why `build-tools` follows AGP, not the manifest.** AGP picks a revision and downloads it when
+  absent, so a pin *ahead* of AGP's request is worse than useless: the baked copy goes unused and
+  the build fetches AGP's choice anyway. Measured on Flutter 3.44.8 (AGP 9.0.1, wants `36.0.0`):
+  pinning `36.1.0` produced `Installing Android SDK Build-Tools 36 in .../build-tools/36.0.0` on
+  every build. "Newest in the manifest" is the wrong question for this pin.
+- **What the un-baked downloads cost**, measured on this repo's `android-sdk` image:
+
+  | Package | Download | Installed | Pulled because |
+  | --- | --- | --- | --- |
+  | `ndk;28.2.13676358` | 722 MB | **2,207 MB** | the app template sets `ndkVersion = flutter.ndkVersion`; AGP wants the NDK even with zero native code |
+  | `cmake;3.22.1` | 22 MB | 60 MB | AGP's built-in default, fetched alongside the NDK although a template app has no Android CMake project (its only `CMakeLists.txt` are Linux/Windows desktop) |
+
+- **Why baking them was rejected: runner caching already absorbs it.** Baking grows the `flutter`
+  image from ~3.3 GB to ~5.5 GB unpacked on **both** arches, paid on every pull forever, to save a
+  download that a warm SDK/Gradle cache pays once. Wrong side of the deal, and 5.5 GB is far
+  outside normal range for a CI image. Confirms the earlier call not to bundle a heavy NDK
+  ([#arm64-android-build-limitation](#arm64-android-build-limitation), *Rejected paths*), now with
+  numbers.
+- **If that ever changes** (ephemeral uncached runners), the NDK needs no new pin: its version is
+  readable from the Flutter clone the image already carries, at
+  `$FLUTTER_HOME/packages/flutter_tools/lib/src/android/gradle_utils.dart` (`const ndkVersion`,
+  mirrored in `gradle/src/main/kotlin/FlutterExtension.kt`), so a `RUN` can derive it and stay
+  correct across Flutter bumps. CMake would need a manual pin; Flutter never references it.
+- **Guard:** `scripts/test.sh apk` fails if Gradle installs anything under `/opt` except the NDK or
+  CMake, turning a pin that drifts from AGP's request into a red test rather than a silent
+  per-build download. That allowlist is this decision in executable form.
+
+---
+
 <a id="quiet-ci-defaults"></a>
 ## Quiet-by-default: telemetry off, version check skipped
 
