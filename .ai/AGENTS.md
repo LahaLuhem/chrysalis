@@ -126,6 +126,11 @@ chrysalis/
     build. Prove a `build-tools` bump with `scripts/test.sh apk`, which fails on any unexpected
     mid-build install. Measured numbers, and why re-proposing the NDK bake needs new evidence:
     [`APPENDIX.md#ndk-cmake-not-baked`](../APPENDIX.md#ndk-cmake-not-baked).
+12. **`lint` and `images-ok` are `master`'s required checks; don't rename them in isolation.**
+    Renovate automerges the boring tier of dependency PRs, and GitHub auto-merge waits only on
+    *required* checks, so renaming or dropping either job un-gates automerge silently. Touch one
+    and update `master`'s ruleset in the same pass:
+    [`APPENDIX.md#renovate-automerge`](../APPENDIX.md#renovate-automerge).
 
 ## Build & publish flow
 
@@ -136,7 +141,9 @@ chrysalis/
    - builds `flutter` for each arch `FROM` that manifest list, pushes by digest, merges into
      `flutter:<version>` + `flutter:stable`.
 3. Weekly, Renovate (`.github/renovate.jsonc`) checks the stable Flutter channel; if it moved, it
-   opens a PR bumping `versions.env`. Merging triggers a republish.
+   opens a PR bumping `versions.env`. Merging triggers a republish. Digest and patch bumps automerge
+   once `lint` + `images-ok` are green, so that republish can happen unattended; minor and major
+   wait for a human ([`APPENDIX.md#renovate-automerge`](../APPENDIX.md#renovate-automerge)).
 
 ## Testing
 

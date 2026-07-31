@@ -312,3 +312,8 @@ few tools run emulated while everything else stays native. The full story is in
 and opens a PR bumping [`versions.env`](versions.env). Merge it, and the images rebuild on
 the new version. The same config keeps the GitHub Actions pins and the `ubuntu` base image
 current.
+
+Patch and digest bumps automerge once CI is green, so `flutter:stable` can move to a new patch
+without anyone pressing a button. Minor and major bumps wait for a human. Pin a digest, or a
+`flutter:<x.y.z>` tag, if you need a version that never moves under you
+([APPENDIX.md](APPENDIX.md#renovate-automerge)).
