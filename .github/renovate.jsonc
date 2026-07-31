@@ -15,7 +15,18 @@
   // Label every dependency PR; the dev-dependencies rule below overrides this for CI tooling.
   "labels": ["dependencies"],
 
+  // GitHub's native auto-merge. Merging republishes here (APPENDIX.md#publish-gating), and GitHub
+  // waits only on *required* checks, so master's ruleset must require `lint` + `images-ok`.
+  "platformAutomerge": true,
+  // master requires linear history; the platform default (a merge commit) would be rejected.
+  "automergeStrategy": "rebase",
+
   "packageRules": [
+    {
+      "description": "Automerge the boring tier: digests, re-pins, patch bumps. Minor and major stay manual; a Flutter minor moves the toolchain under every consumer, and flutter never builds on PRs.",
+      "matchUpdateTypes": ["digest", "pin", "pinDigest", "patch"],
+      "automerge": true
+    },
     {
       "description": "android-sdk:latest is rebuilt and republished every run (flutter FROMs it); it must float, so never digest-pin it.",
       "matchPackageNames": ["ghcr.io/lahaluhem/android-sdk"],
@@ -31,7 +42,10 @@
       "description": "Batch non-major action bumps into one PR; N separate PRs cost N serialized publishes. Majors stay separate for visibility.",
       "matchManagers": ["github-actions"],
       "matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
-      "groupName": "CI workflow actions"
+      "groupName": "CI workflow actions",
+      // Set here, not inherited: a group takes the highest update type of its members, so one minor
+      // would drop the whole batch out of the automerge rule above. Fine, actions are SHA-pinned.
+      "automerge": true
     }
   ],
 

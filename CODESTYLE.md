@@ -6,8 +6,10 @@ hard rules live in [AGENTS.md](AGENTS.md); design rationale lives in [APPENDIX.m
 
 Two habits cut across everything:
 
-- **Comments explain *why*, not *what*.** The hairier the layer, the more it earns a
-  comment; push the long story into an [APPENDIX.md](APPENDIX.md) anchor and link it.
+- **Comments explain *why*, not *what*, in one or two lines.** The hairier the layer, the more
+  it earns a comment, but one that needs a paragraph is rationale: push it into an
+  [APPENDIX.md](APPENDIX.md) anchor and leave a one-line pointer. Renovate rule
+  `description`s hold to the same bound.
 - **Lint before "done".** `scripts/test.sh lint` runs hadolint, actionlint, shellcheck, biome, and
   a `versions.env` sanity check from the pinned Linterpol image. A change isn't done until
   it's clean.
