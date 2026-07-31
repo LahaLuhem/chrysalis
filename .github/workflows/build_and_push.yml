@@ -137,11 +137,8 @@ jobs:
         flutter_version=${{ needs.prepare.outputs.flutter_version }}
       push: ${{ needs.prepare.outputs.push == 'true' }}
 
-  # The one check branch protection should require from this workflow. android-sdk and flutter are
-  # reusable-workflow calls, so their check names change shape with the gate: "android-sdk" when the
-  # call is skipped, "android-sdk / build (linux/amd64)" when it runs. A ruleset can only name fixed
-  # contexts, so requiring either name blocks the PRs that report the other one. This reports under
-  # the same name either way, and skipped upstream jobs count as passing (a gated-out PR is green).
+  # The only requirable check here: the android-sdk and flutter calls change check name depending on
+  # whether the gate skipped them, so a ruleset can't name either. This one is stable.
   images-ok:
     needs: [prepare, android-sdk, flutter]
     if: always()
