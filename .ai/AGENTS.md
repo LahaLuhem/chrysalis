@@ -120,7 +120,7 @@ chrysalis/
     saying "go ahead") greenlights the **first** sub-task only, not the whole plan run
     end-to-end. Keep pausing between every step until the user explicitly says to stop. Never
     one-shot a multi-step change.
-11. **Only the `platform` pin tracks Google's manifest.** `build-tools` follows what AGP asks for
+11. **`platform` and `cmdline-tools` track Google's manifest, `build-tools` doesn't.** It follows what AGP asks for
     (a pin ahead of AGP's request goes unused while every consumer build fetches AGP's choice
     anyway); the NDK and CMake are deliberately not baked at all, despite being fetched on every
     build. Prove a `build-tools` bump with `scripts/test.sh apk`, which fails on any unexpected

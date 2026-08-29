@@ -424,7 +424,8 @@ verified. A present manifest is not a verified build.
 
 - **Decision:** bake the `build-tools` revision **AGP asks for**; do **not** bake the NDK or CMake,
   even though a bare `flutter build apk --debug` fetches both mid-build. So
-  `scripts/check-android-sdk.sh` tracks only the platform against Google's manifest.
+  `scripts/check-android-sdk.sh` checks the platform and cmdline-tools against Google's manifest,
+  and leaves build-tools alone.
 - **Why `build-tools` follows AGP, not the manifest.** AGP picks a revision and downloads it when
   absent, so a pin *ahead* of AGP's request is worse than useless: the baked copy goes unused and
   the build fetches AGP's choice anyway. Measured on Flutter 3.44.8 (AGP 9.0.1, wants `36.0.0`):
