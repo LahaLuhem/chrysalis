@@ -34,7 +34,7 @@ run anywhere: any CI, any container runtime.
 
 | Image | Tags |
 | --- | --- |
-| [`ghcr.io/lahaluhem/flutter`](https://github.com/LahaLuhem/chrysalis/pkgs/container/flutter) | `stable`, plus the exact version (`3.44.4`, ...) |
+| [`ghcr.io/lahaluhem/flutter`](https://github.com/LahaLuhem/chrysalis/pkgs/container/flutter) | `stable`, the minor line (`3.47`), and the exact version (`3.47.1`) |
 | [`ghcr.io/lahaluhem/android-sdk`](https://github.com/LahaLuhem/chrysalis/pkgs/container/android-sdk) | `latest` |
 
 Every tag is a multi-arch manifest, so `docker pull` grabs the variant matching
@@ -51,7 +51,14 @@ docker run --rm -it -v ${PWD}:/build -w /build ghcr.io/lahaluhem/flutter:stable 
 Want a specific Flutter version instead of `stable`? Swap the tag:
 
 ```bash
-docker run --rm -it -v ${PWD}:/build -w /build ghcr.io/lahaluhem/flutter:3.44.4 flutter test
+docker run --rm -it -v ${PWD}:/build -w /build ghcr.io/lahaluhem/flutter:3.47.1 flutter test
+```
+
+Or pin just the minor line. `3.47` always points at the newest 3.47.x, so patches reach you
+without a re-pin:
+
+```bash
+docker run --rm -it -v ${PWD}:/build -w /build ghcr.io/lahaluhem/flutter:3.47 flutter test
 ```
 
 Pin the platform when you need to (otherwise it follows your host):
@@ -317,3 +324,6 @@ Patch and digest bumps automerge once CI is green, so `flutter:stable` can move 
 without anyone pressing a button. Minor and major bumps wait for a human. Pin a digest, or a
 `flutter:<x.y.z>` tag, if you need a version that never moves under you
 ([APPENDIX.md](APPENDIX.md#renovate-automerge)).
+
+> **An `<x.y>` tag stops moving once the next minor is out.** `3.44` sits at `3.44.9` now that
+> 3.47 has shipped, so bump the tag when you're ready to move.

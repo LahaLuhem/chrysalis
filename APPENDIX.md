@@ -7,6 +7,7 @@
 - [Multi-arch via native matrix + push-by-digest + manifest merge](#digest-merge-multiarch)
 - [OCI-native images](#oci-native-images)
 - [Publishing is gated to `master` and manual dispatch](#publish-gating)
+- [`flutter:<x.y>` follows the newest patch on its line](#floating-minor-tag)
 - [Version tracking via Renovate, not a bespoke cron](#renovate-version-tracking)
 - [Renovate automerges the boring tier, gated on one stable check](#renovate-automerge)
 - [`build-tools` is baked to match AGP; the NDK and CMake are deliberately not](#ndk-cmake-not-baked)
@@ -256,6 +257,29 @@ verified. A present manifest is not a verified build.
   building, so the gate can only ever skip work, never a needed publish.
 - **Verification:** a publish is only "done" once `docker manifest inspect <ref>` shows both
   `linux/amd64` and `linux/arm64`. Never report success without it.
+
+---
+
+<a id="floating-minor-tag"></a>
+## `flutter:<x.y>` follows the newest patch on its line
+
+- **What:** each publish tags flutter three ways, in this order: `3.47.1`, `3.47`, `stable`.
+  `3.47` moves to whatever the newest 3.47 patch is. Debian and Ubuntu tag point releases the
+  same way.
+- **Why:** stable Flutter patches land about weekly (3.44.0 to 3.44.9 was ten releases in 80
+  days). Without an `<x.y>` tag you either take `stable` and get moved onto a new minor whenever
+  one lands, or pin an exact version and bump it every week. This sits in between.
+- **Keep the exact version first in the tag list.** It's what ends up in the image's version
+  label, and the merge job's inspect and verify steps only look at the first tag. Flip the order
+  and every image claims to be `3.47` while the OCI checks run against the wrong ref. CI won't
+  catch it either, since flutter never builds on PRs, so the tag list is first tried on the
+  publish after merge.
+- **Old `<x.y>` tags go quiet.** `3.44` sits at `3.44.9` forever once 3.47 ships, and nobody gets
+  told. That matches how Flutter works: a minor line is done when the next one starts (checked
+  all 190 stable releases, it has never gone back).
+- **Not doing:** a bare `3` tag, since Flutter has been 3.x since 2022 and it would just be
+  `stable` again. Nor a second pin in `versions.env`, which can drift from `FLUTTER_VERSION`
+  when we can derive it instead.
 
 ---
 

@@ -15,7 +15,7 @@ Two images:
 
 - **`android-sdk:latest`** — Ubuntu + Android `cmdline-tools`, `platform-tools`,
   `build-tools`, a platform. The base layer.
-- **`flutter:<version>` / `flutter:stable`** — `FROM` the `android-sdk` image, clones
+- **`flutter:<version>` / `flutter:<x.y>` / `flutter:stable`** — `FROM` the `android-sdk` image, clones
   Flutter at the pinned version.
 
 It is a fork of [`davidmartos96/docker-images-flutter`](https://github.com/davidmartos96/docker-images-flutter),
@@ -139,7 +139,9 @@ chrysalis/
    - builds `android-sdk` for each arch (native runner), pushes by digest, merges into
      `android-sdk:latest`;
    - builds `flutter` for each arch `FROM` that manifest list, pushes by digest, merges into
-     `flutter:<version>` + `flutter:stable`.
+     `flutter:<version>` + `flutter:<x.y>` + `flutter:stable`. `<x.y>` is derived from
+     `FLUTTER_VERSION` and follows that line's newest patch
+     ([`APPENDIX.md#floating-minor-tag`](../APPENDIX.md#floating-minor-tag)).
 3. Weekly, Renovate (`.github/renovate.jsonc`) checks the stable Flutter channel; if it moved, it
    opens a PR bumping `versions.env`. Merging triggers a republish. Digest and patch bumps automerge
    once `lint` + `images-ok` are green, so that republish can happen unattended; minor and major
