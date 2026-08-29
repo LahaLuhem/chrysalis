@@ -49,6 +49,12 @@
       "matchManagers": ["github-actions"],
       "matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
       "groupName": "CI workflow actions"
+    },
+    {
+      "description": "Everything pinned under images/ ends up inside the published images, so batch it: one PR means one republish instead of four. Flutter is deliberately not in here, its own PR title is the release note. Majors stay separate for visibility.",
+      "matchFileNames": ["images/**"],
+      "matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
+      "groupName": "image dependencies"
     }
   ],
 
@@ -64,12 +70,12 @@
       ]
     },
     {
-      "description": "Track the Linterpol CI lint/test image (a dev-dependency: provides hadolint/actionlint/shellcheck/biome + container-structure-test, not shipped in the published images). Single source: .github/lint-tools.env, read by scripts/test.sh and the build-image.yml structure-test step. depType `dev` drives the dev-dependencies label/scope (packageRules above).",
+      "description": "Track the pinned tool images in .github/lint-tools.env: Linterpol (the linters + container-structure-test) and the renovate image that schema-checks this file. Neither ships in the published images, so depType `dev` drives the dev-dependencies label/scope (packageRules above).",
       "customType": "regex",
       "managerFilePatterns": ["/^\\.github/lint-tools\\.env$/"],
       // datasource + depName from the `# renovate:` marker; currentValue is the tag, currentDigest the sha256.
       "matchStrings": [
-        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+LINTERPOL_IMAGE=[^:\\s]+:(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[0-9a-f]+)"
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+\\S+_IMAGE=[^:\\s]+:(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[0-9a-f]+)"
       ],
       "depTypeTemplate": "dev"
     },

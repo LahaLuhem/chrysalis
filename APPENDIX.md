@@ -321,6 +321,15 @@ verified. A present manifest is not a verified build.
   Both `scripts/test.sh` and the `build-image.yml` structure-test step read that pin. It replaced
   per-tool installs that curled `latest` hadolint and ran `download-actionlint.bash` from `main`:
   unpinned, and a corrupt download once slipped through as a valid-looking HTTP 200 and broke a run.
+- **Grouping:** everything pinned under `images/` batches into one "image dependencies" PR, because
+  each merge republishes and N PRs cost N publishes. The Flutter pin stays on its own, since its PR
+  title is the release note for the whole repo. Non-major only, same as the actions group.
+- **Checking this file:** `scripts/test.sh renovate` runs `renovate-config-validator` from the
+  official renovate image, pinned next to Linterpol in `.github/lint-tools.env`. Opt-in, not part of
+  `lint`: the image is ~1.3 GB and this file changes a few times a year. Not in Linterpol because the
+  validator needs Node and that image is static binaries only. Run it from the repo root with no
+  arguments, or it reads the file as a *global* config and waves almost anything through. It catches
+  unknown options and broken regexes but not bad enum values, so it's a net with holes.
 - **Why not lint Actions:** the standard alternative is official Actions like
   `hadolint/hadolint-action`, which `best-practices` would SHA-pin automatically. We use the image
   instead because `scripts/test.sh lint` is the single source of lint truth, and it runs every linter
