@@ -1,10 +1,10 @@
 name: Android SDK freshness
 
-# Weekly check that the Android SDK platform pin in images/android-sdk/Dockerfile is still the
-# latest stable platform in Google's manifest. Renovate can't track it (its customDatasource
-# can't parse the manifest XML), so this stands in for a Renovate "update available" PR: on drift
-# it opens or updates one tracking issue, and closes it once the pin catches up. The bump stays
-# manual. build-tools is out of scope by design (AGENTS.md rule 11).
+# Weekly check that the platform and cmdline-tools pins in images/android-sdk/Dockerfile still
+# match Google's manifest. Renovate can't track them (its customDatasource can't parse the
+# manifest XML), so this stands in for a Renovate "update available" PR: on drift it opens or
+# updates one tracking issue, and closes it once the pins catch up. The bump stays manual.
+# build-tools is out of scope by design (AGENTS.md rule 11).
 # scripts/check-android-sdk.sh holds the logic and runs locally too.
 
 on:
