@@ -22,7 +22,8 @@ ENV ANDROID_SDK_ROOT=$ANDROID_HOME \
     PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools
 
 # comes from https://developer.android.com/studio/#command-line-tools-only
-ENV ANDROID_SDK_TOOLS_VERSION=13114758
+# Opaque build number, this one is rev 23. scripts/check-android-sdk.sh watches it.
+ENV ANDROID_SDK_TOOLS_VERSION=16111833
 
 # --- Build toolchain: system packages --------------------------------------
 # JDK + the deps to fetch and build with the Android SDK. jq and lcov are the
