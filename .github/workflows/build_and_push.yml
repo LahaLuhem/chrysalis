@@ -28,6 +28,7 @@ jobs:
       pull-requests: read
     outputs:
       flutter_version: ${{ steps.vars.outputs.flutter_version }}
+      flutter_minor: ${{ steps.vars.outputs.flutter_minor }}
       docker_tag: ${{ steps.vars.outputs.docker_tag }}
       push: ${{ steps.vars.outputs.push }}
       build: ${{ steps.gate.outputs.build }}
@@ -39,8 +40,12 @@ jobs:
         id: vars
         run: |
           source versions.env
-          echo "flutter_version=$FLUTTER_VERSION" >> "$GITHUB_OUTPUT"
-          echo "docker_tag=$DOCKER_TAG" >> "$GITHUB_OUTPUT"
+          {
+            echo "flutter_version=$FLUTTER_VERSION"
+            # 3.47.1 -> 3.47, so people can pin a minor line and still get its patches.
+            echo "flutter_minor=${FLUTTER_VERSION%.*}"
+            echo "docker_tag=$DOCKER_TAG"
+          } >> "$GITHUB_OUTPUT"
           if [ "${{ github.ref }}" = "refs/heads/master" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "push=true" >> "$GITHUB_OUTPUT"
           else
@@ -128,8 +133,11 @@ jobs:
     with:
       name: flutter
       context: images/flutter
+      # Exact version first: it's what lands in the image's version label, and the merge job only
+      # checks the first tag. APPENDIX.md#floating-minor-tag
       tags: |
         ${{ needs.prepare.outputs.flutter_version }}
+        ${{ needs.prepare.outputs.flutter_minor }}
         ${{ needs.prepare.outputs.docker_tag }}
       title: Flutter
       description: Flutter on the chrysalis android-sdk base image
