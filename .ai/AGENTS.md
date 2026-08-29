@@ -143,9 +143,9 @@ chrysalis/
      `FLUTTER_VERSION` and follows that line's newest patch
      ([`APPENDIX.md#floating-minor-tag`](../APPENDIX.md#floating-minor-tag)).
 3. Weekly, Renovate (`.github/renovate.jsonc`) checks the stable Flutter channel; if it moved, it
-   opens a PR bumping `versions.env`. Merging triggers a republish. Digest and patch bumps automerge
-   once `lint` + `images-ok` are green, so that republish can happen unattended; minor and major
-   wait for a human ([`APPENDIX.md#renovate-automerge`](../APPENDIX.md#renovate-automerge)).
+   opens a PR bumping `versions.env`. Merging triggers a republish. Anything under a major automerges
+   once `lint` + `images-ok` are green, so that republish can happen unattended. Majors wait for a
+   human ([`APPENDIX.md#renovate-automerge`](../APPENDIX.md#renovate-automerge)).
 
 ## Testing
 

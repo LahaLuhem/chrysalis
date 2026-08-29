@@ -345,9 +345,16 @@ verified. A present manifest is not a verified build.
   linterpol's isn't: a bare semver tag publishes there, not a push to `main`. It's still safe here
   because `build-image.yml` structure-tests both arches *before* it pushes, and the manifest merge
   only runs once both legs pass. A bad bump costs a red `master`, never a bad tag.
-- **Why `minor` and `major` stay manual:** a Flutter minor can move the toolchain under every
-  consumer, and the `flutter` image is never built on pull requests (it needs the pushed
-  `android-sdk` base), so nothing validates it before the publish run.
+- **Why `minor` automerges too:** CI is the guard and it doesn't care what kind of bump it is.
+  `android-sdk` is built and structure-tested on the PR, `flutter` on the publish run before
+  anything is pushed, so a bad minor costs a red `master` and nothing else. The old worry, that a
+  minor moves the toolchain under every consumer, is the tag's job now: pin `flutter:<x.y>`
+  ([#floating-minor-tag](#floating-minor-tag)). `major` still waits for a human.
+- **`ubuntu` is held to LTS tags.** `26.04` to `26.10` reads as a *minor*, so it would ride along
+  with the rule above, but an interim release gets 9 months of support instead of 5 years and
+  nothing in CI can see that, because nothing breaks. An `allowedVersions` regex (even year plus
+  `.04`) keeps only LTS in scope, so `26.04` to `28.04` stays a major. Renovate ships the same
+  trick for JDK images as `workarounds:javaLTSVersions`.
 - **`images-ok` exists because the reusable-call check names aren't stable.** `android-sdk` and
   `flutter` are `workflow_call` jobs, so the contexts they report depend on the path gate:
   `android-sdk` (skipped) on a docs-only PR, but `android-sdk / build (linux/amd64)`,
