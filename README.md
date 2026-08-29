@@ -320,10 +320,9 @@ and opens a PR bumping [`versions.env`](versions.env). Merge it, and the images 
 the new version. The same config keeps the GitHub Actions pins and the `ubuntu` base image
 current.
 
-Patch and digest bumps automerge once CI is green, so `flutter:stable` can move to a new patch
-without anyone pressing a button. Minor and major bumps wait for a human. Pin a digest, or a
-`flutter:<x.y.z>` tag, if you need a version that never moves under you
-([APPENDIX.md](APPENDIX.md#renovate-automerge)).
+Anything under a major automerges once CI is green, so `flutter:stable` keeps up on its own.
+Majors wait for a human. Pin a digest or an exact `flutter:<x.y.z>` tag if you want a version that
+never moves under you ([APPENDIX.md](APPENDIX.md#renovate-automerge)).
 
 > **An `<x.y>` tag stops moving once the next minor is out.** `3.44` sits at `3.44.9` now that
 > 3.47 has shipped, so bump the tag when you're ready to move.

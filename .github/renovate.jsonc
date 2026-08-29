@@ -23,9 +23,15 @@
 
   "packageRules": [
     {
-      "description": "Automerge the boring tier: digests, re-pins, patch bumps. Minor and major stay manual; a Flutter minor moves the toolchain under every consumer, and flutter never builds on PRs.",
-      "matchUpdateTypes": ["digest", "pin", "pinDigest", "patch"],
+      "description": "Automerge the boring tier, now everything under a major. CI is the guard either way, and anyone who can't take a Flutter minor pins flutter:<x.y>.",
+      "matchUpdateTypes": ["digest", "pin", "pinDigest", "patch", "minor"],
       "automerge": true
+    },
+    {
+      "description": "Only track Ubuntu LTS (even year + .04). An interim release like 26.10 counts as a minor and would automerge, but it gets 9 months of support instead of 5 years and nothing in CI can spot that.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["ubuntu"],
+      "allowedVersions": "/^\\d*[02468]\\.04$/"
     },
     {
       "description": "android-sdk:latest is rebuilt and republished every run (flutter FROMs it); it must float, so never digest-pin it.",
@@ -42,10 +48,7 @@
       "description": "Batch non-major action bumps into one PR; N separate PRs cost N serialized publishes. Majors stay separate for visibility.",
       "matchManagers": ["github-actions"],
       "matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
-      "groupName": "CI workflow actions",
-      // Set here, not inherited: a group takes the highest update type of its members, so one minor
-      // would drop the whole batch out of the automerge rule above. Fine, actions are SHA-pinned.
-      "automerge": true
+      "groupName": "CI workflow actions"
     }
   ],
 
