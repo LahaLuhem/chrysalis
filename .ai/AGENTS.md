@@ -161,6 +161,8 @@ chrysalis/
   Build-Tools` line in the output means the pin is wrong. Slow and opt-in, not part of `all`.
 - `scripts/test.sh multiarch` builds `android-sdk` for amd64 + arm64 (amd64 emulated) and
   asserts the resulting manifest carries both arches. Slow and opt-in, not part of `all`.
+- `scripts/test.sh renovate` schema-checks `.github/renovate.jsonc` with `renovate-config-validator`
+  from the official renovate image. Big pull, opt-in, not part of `all`.
 - `scripts/test.sh all` runs lint + image.
 
 Run it before touching the Dockerfiles or the workflow. The lint tools (hadolint,

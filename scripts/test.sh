@@ -11,9 +11,11 @@
 #              Slow; opt-in, not part of `all`.
 #   multiarch  Build android-sdk for amd64 + arm64 (amd64 emulated) and assert the
 #              resulting manifest carries both arches. Slow; opt-in, not part of `all`.
+#   renovate   Schema-check .github/renovate.jsonc with renovate-config-validator, from the
+#              official renovate image. Big pull; opt-in, not part of `all`.
 #   all        lint + image.
 #
-# Usage: scripts/test.sh [lint|image|apk|multiarch|all]   (default: all)
+# Usage: scripts/test.sh [lint|image|apk|multiarch|renovate|all]   (default: all)
 #
 set -euo pipefail
 
@@ -47,6 +49,10 @@ need() {
 # shared with the build-image.yml structure-test step; Renovate bumps it there).
 LINTERPOL_IMAGE="${LINTERPOL_IMAGE:-$(grep -E '^LINTERPOL_IMAGE=' .github/lint-tools.env | cut -d= -f2-)}"
 linterpol_ready=''
+
+# Its own image, not linterpol: the validator is a Node tool and linterpol carries no runtimes.
+# Pinned in the same file, read the same way. APPENDIX.md#renovate-version-tracking
+RENOVATE_IMAGE="${RENOVATE_IMAGE:-$(grep -E '^RENOVATE_IMAGE=' .github/lint-tools.env | cut -d= -f2-)}"
 
 # Make sure LINTERPOL_IMAGE is present locally, pulling it on demand (the default is a public ghcr ref).
 # A local-only tag that hasn't been built will fail the pull, with a hint.
@@ -360,6 +366,22 @@ run_multiarch() {
   rm -rf "$tmpd"
 }
 
+# run_renovate: schema-check .github/renovate.jsonc. No file argument on purpose: given one, the
+# validator reads it as a *global* config, which is a different schema and passes anything.
+run_renovate() {
+  if ! command -v docker >/dev/null 2>&1; then
+    printf '%smissing tool:%s docker is required to run the renovate validator\n' "$red" "$rst"
+    exit 2
+  fi
+  section 'renovate-config-validator (.github/renovate.jsonc)'
+  if docker run --rm -v "$repo_root:/work:ro" -w /work \
+       --entrypoint renovate-config-validator "$RENOVATE_IMAGE"; then
+    ok 'renovate config valid'
+  else
+    bad 'renovate config'
+  fi
+}
+
 main() {
   local cmd="${1:-all}"
   case "$cmd" in
@@ -367,8 +389,9 @@ main() {
     image)     run_image ;;
     apk)       run_apk ;;
     multiarch) run_multiarch ;;
+    renovate)  run_renovate ;;
     all)       run_lint; run_image ;;
-    *) printf 'usage: %s [lint|image|apk|multiarch|all]\n' "$0"; exit 2 ;;
+    *) printf 'usage: %s [lint|image|apk|multiarch|renovate|all]\n' "$0"; exit 2 ;;
   esac
 
   echo
