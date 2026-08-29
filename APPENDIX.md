@@ -3,6 +3,7 @@
 - [`AGENTS.md` and `CLAUDE.md` are symlinks into `.ai/`](#ai-files-symlinked)
 - [Why this fork exists: maintained *and* multi-arch](#why-multi-arch)
 - [arm64 Linux builds Android only under x86-64 emulation](#arm64-android-build-limitation)
+- [The Android emulator isn't shipped](#no-emulator)
 - [Flutter is installed by `git clone`, not the release tarball](#flutter-clone-not-tarball)
 - [Multi-arch via native matrix + push-by-digest + manifest merge](#digest-merge-multiarch)
 - [OCI-native images](#oci-native-images)
@@ -143,6 +144,33 @@ emulation on arm64, skipping rather than failing where the host has no emulation
 cirruslabs shipped arm64 manifests with the same x86-64-tool reality but only ever
 smoke-tested the x86_64 emulator path, so their arm64 Android build was never actually
 verified. A present manifest is not a verified build.
+
+---
+
+<a id="no-emulator"></a>
+## The Android emulator isn't shipped
+
+- **What:** no `emulator` package. It used to go in on amd64 only, where it was the single biggest
+  layer in the image.
+- **Why:** it couldn't do anything as shipped. An emulator needs a system image to boot and none was
+  baked, so starting it just said "no AVDs". To use one for real you need a system image (1.8 GB for
+  android-36 x86_64), an AVD, and `/dev/kvm` in the container. None of that can be baked, so anyone
+  emulating was already running an install step. Adding `emulator` to it is one more word and 337 MB
+  on top of 1.8 GB they can't dodge. Everyone else paid for it on every pull.
+- **What it saved.** A layer-by-layer diff of the published amd64 image against a fresh build shows
+  exactly one layer gone, the emulator's, at 859 MB unpacked and 327.4 MB compressed:
+
+  | compressed | before | after |
+  | --- | ---: | ---: |
+  | `android-sdk:latest` amd64 | 910.0 MB | 582.6 MB |
+  | `flutter:stable` amd64 | 2062 MB | ~1735 MB |
+
+  arm64 never had it, so the two arches are near-identical now (580.6 MB and 1736 MB).
+- **The risk we took:** `android-sdk` publishes only `:latest`, so anyone who was using the emulator
+  has no older tag to fall back on. Judged unlikely for an image whose job is building APKs in CI.
+- **The guard:** `structure-test.yaml` asserts the directory is absent, on both arches, on every PR.
+  It replaced a longer arch-conditional check in `test.sh` that only ran on whatever arch you were
+  sitting on.
 
 ---
 

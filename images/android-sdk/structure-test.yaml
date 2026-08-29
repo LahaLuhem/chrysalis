@@ -24,6 +24,11 @@ fileExistenceTests:
   - name: platform android-36 (android.jar)
     path: /opt/android-sdk-linux/platforms/android-36/android.jar
     shouldExist: true
+  - name: emulator not installed
+    # Can't boot without a system image (~1.8 GB) and an AVD, so we don't ship it. This keeps it
+    # from creeping back in. APPENDIX.md#no-emulator
+    path: /opt/android-sdk-linux/emulator
+    shouldExist: false
   - name: x86-64 dynamic loader present (arm64 runs the SDK tools under emulation)
     # On amd64 this is the native loader. On arm64 it exists only because the
     # Dockerfile bakes libc6:amd64 (the arm64 emulation-libs layer); its absence

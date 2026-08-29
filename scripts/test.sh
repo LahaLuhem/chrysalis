@@ -224,22 +224,6 @@ run_image() {
     bad "image does not report Flutter $ver"
   fi
 
-  # The Android emulator is x86_64-only; images/android-sdk/Dockerfile skips it on arm64.
-  section 'android emulator arch invariant'
-  if [ "$arch" = "arm64" ] || [ "$arch" = "aarch64" ]; then
-    if docker run --rm "$android_img" sh -c '! test -d /opt/android-sdk-linux/emulator'; then
-      ok 'emulator absent on arm64 (expected)'
-    else
-      bad 'emulator present on arm64 (the uname guard is broken)'
-    fi
-  else
-    if docker run --rm "$android_img" sh -c 'test -d /opt/android-sdk-linux/emulator'; then
-      ok 'emulator present on amd64 (expected)'
-    else
-      bad 'emulator absent on amd64 (unexpected)'
-    fi
-  fi
-
   # arm64 runs the (x86-64) Android tools only under host emulation; the image bakes the
   # x86-64 libs they load (asserted in structure-test.yaml). Here, prove aapt2 actually
   # runs. That needs host x86-64 emulation (Apple Silicon Docker/OrbStack: built-in; bare

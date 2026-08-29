@@ -59,8 +59,8 @@ Why it exists: [`APPENDIX.md#why-multi-arch`](../APPENDIX.md#why-multi-arch).
 chrysalis/
 ├── versions.env                     DOCKER_TAG=stable, FLUTTER_VERSION=<x.y.z> (pinned inputs)
 ├── images/
-│   ├── android-sdk/                 ubuntu:24.04 + Android cmdline/platform/build tools
-│   │   ├── Dockerfile               (arm64-aware: skips `sdkmanager emulator` on arm64)
+│   ├── android-sdk/                 ubuntu:26.04 + Android cmdline/platform/build tools
+│   │   ├── Dockerfile               (arm64-aware: bakes the x86-64 libs the SDK tools need)
 │   │   ├── structure-test.yaml      container-structure-test assertions
 │   │   └── .dockerignore
 │   └── flutter/                     FROM android-sdk; clones Flutter at FLUTTER_VERSION
@@ -154,7 +154,8 @@ chrysalis/
 - `scripts/test.sh lint` runs hadolint, actionlint, shellcheck, biome, and a `versions.env` check.
 - `scripts/test.sh image` builds `android-sdk` + `flutter` for the host arch and asserts
   their contents with [container-structure-test](https://github.com/GoogleContainerTools/container-structure-test)
-  (specs in `images/<name>/structure-test.yaml`), plus a version match and the arm64 emulator invariant.
+  (specs in `images/<name>/structure-test.yaml`), plus a version match and, on arm64, a check that
+  the x86-64 tools actually run.
 - `scripts/test.sh apk` builds a debug APK from a throwaway app in the `flutter` image, proving
   the Android toolchain works end to end (arm64 runs it under x86-64 emulation). It is also how
   the `build-tools` pin is verified against AGP (rule 11): an `Installing Android SDK

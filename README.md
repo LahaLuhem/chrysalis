@@ -310,8 +310,10 @@ few tools run emulated while everything else stays native. The full story is in
 
 </details>
 
-> **Note:** the Android *emulator* isn't in the arm64 image either. Google
-> doesn't ship it for [`linux/arm64`](https://issuetracker.google.com/issues/227219818).
+> **Note:** the Android *emulator* isn't in these images. It can't boot anything without a system
+> image (~1.8 GB) and an AVD, so shipping it would cost every puller 327 MB for something they'd
+> still have to set up. Want one? Run `sdkmanager emulator` alongside the system image you're
+> fetching anyway. More in [APPENDIX.md](APPENDIX.md#no-emulator).
 
 ## Staying current
 
