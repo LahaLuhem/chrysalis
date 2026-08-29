@@ -19,7 +19,7 @@ ENV ANDROID_HOME=/opt/android-sdk-linux \
     LANGUAGE=en_US:en
 
 ENV ANDROID_SDK_ROOT=$ANDROID_HOME \
-    PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/emulator
+    PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools
 
 # comes from https://developer.android.com/studio/#command-line-tools-only
 ENV ANDROID_SDK_TOOLS_VERSION=13114758
@@ -86,9 +86,6 @@ RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers \
     && mkdir -p /root/.android \
     && touch /root/.android/repositories.cfg \
     && sdkmanager platform-tools
-
-# emulator is not available on linux/arm64 (https://issuetracker.google.com/issues/227219818)
-RUN if [ "$(uname -m)" = "x86_64" ]; then sdkmanager emulator ; fi
 
 # --- Build toolchain: Android platform + build-tools -----------------------
 # https://developer.android.com/studio/releases/build-tools

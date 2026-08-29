@@ -10,6 +10,9 @@ Two habits cut across everything:
   it earns a comment, but one that needs a paragraph is rationale: push it into an
   [APPENDIX.md](APPENDIX.md) anchor and leave a one-line pointer. Renovate rule
   `description`s hold to the same bound.
+- **Write like a person, not a brochure.** Short and plain beats thorough and formal. Say the thing
+  once, skip the buzzwords, use contractions. No em-dashes and no semicolons in prose, they're the
+  main tell that a machine wrote it. Applies to docs, comments, commit messages and PR bodies alike.
 - **Lint before "done".** `scripts/test.sh lint` runs hadolint, actionlint, shellcheck, biome, and
   a `versions.env` sanity check from the pinned Linterpol image. A change isn't done until
   it's clean.
@@ -28,7 +31,7 @@ Two habits cut across everything:
 - Collapse apt into one layer ending in `rm -rf /var/lib/apt/lists/*`; use
   `--no-install-recommends` (the inherited JDK block omits it by design, DL3015).
 - Guard arch-specific steps on `uname -m` (`aarch64` / `x86_64`) and say why in a comment
-  (e.g. the emulator is x86-only). Never assume the build arch.
+  (e.g. only arm64 needs the x86-64 libs). Never assume the build arch.
 - Every `.hadolint.yaml` ignore is a deliberate, commented choice; don't blanket-mute, and
   comment any rule you add.
 
