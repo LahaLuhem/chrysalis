@@ -4,6 +4,7 @@
 - [Why this fork exists: maintained *and* multi-arch](#why-multi-arch)
 - [arm64 Linux builds Android only under x86-64 emulation](#arm64-android-build-limitation)
 - [The Android emulator isn't shipped](#no-emulator)
+- [The `android` CLI can't be used here: it's x86-64 only](#no-android-cli)
 - [Flutter is installed by `git clone`, not the release tarball](#flutter-clone-not-tarball)
 - [Multi-arch via native matrix + push-by-digest + manifest merge](#digest-merge-multiarch)
 - [OCI-native images](#oci-native-images)
@@ -171,6 +172,29 @@ verified. A present manifest is not a verified build.
 - **The guard:** `structure-test.yaml` asserts the directory is absent, on both arches, on every PR.
   It replaced a longer arch-conditional check in `test.sh` that only ran on whatever arch you were
   sitting on.
+
+---
+
+<a id="no-android-cli"></a>
+## The `android` CLI can't be used here: it's x86-64 only
+
+- **Decision:** keep installing SDK packages with `sdkmanager`, deprecated as it is. Don't move to
+  `android sdk install`.
+- **Why:** `android` is a native ELF binary and Google ships **only an x86-64 build** of it. It's
+  the sole ELF in cmdline-tools, everything else there (`sdkmanager`, `avdmanager`) is a shell
+  script into Java and so runs anywhere. On the native arm64 build leg the binary can't execute at
+  all: `Exec format error`, exit 126. Using it would mean the arm64 image could only be built under
+  emulation, which breaks hard rule 4.
+- **This is not a "try again later" item** unless Google ships `android` for linux/arm64. Check the
+  ELF header before re-proposing: `od -An -tx1 -j18 -N2 .../cmdline-tools/latest/bin/android`,
+  where `3e00` is x86-64 and `b700` is aarch64.
+- **cmdline-tools is still held at rev 22.** Separate reason, still valid: on rev 23
+  `sdkmanager --licenses` became a no-op that writes nothing, so `flutter doctor` reports "Android
+  license status unknown". Rev 22 is the last rev where it works. Upstream: flutter/flutter#191487
+  and #191558. `scripts/check-android-sdk.sh` reports the pin as behind on purpose until then.
+- **A local arm64 test cannot prove this.** An Apple Silicon host with OrbStack has x86-64 binfmt
+  registered, so an x86-64 binary runs fine inside an arm64 container and a local check passes.
+  That is exactly how this reached CI. See CLAUDE.md, *Validating arm64*.
 
 ---
 

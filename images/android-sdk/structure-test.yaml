@@ -24,6 +24,11 @@ fileExistenceTests:
   - name: platform android-36 (android.jar)
     path: /opt/android-sdk-linux/platforms/android-36/android.jar
     shouldExist: true
+  - name: SDK licences accepted (full set)
+    # `android sdk install` writes only android-sdk-license, and flutter doctor needs the rest.
+    # Checking a second one catches that (APPENDIX.md#android-cli).
+    path: /opt/android-sdk-linux/licenses/android-sdk-preview-license
+    shouldExist: true
   - name: emulator not installed
     # Can't boot without a system image (~1.8 GB) and an AVD, so we don't ship it. This keeps it
     # from creeping back in. APPENDIX.md#no-emulator

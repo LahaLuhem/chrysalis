@@ -235,6 +235,11 @@ run_image() {
     # shellcheck disable=SC2016
     if docker run --rm "$android_img" sh -c 'aapt2="$(ls "$ANDROID_HOME"/build-tools/*/aapt2 | head -1)"; exec "$aapt2" version' >/dev/null 2>&1; then
       ok 'aapt2 runs (x86-64 emulation available)'
+      # Same emulation makes an x86-64 binary look native here, so a green arm64 run locally is
+      # not proof the arm64 build works. It has bitten us (../APPENDIX.md#no-android-cli).
+      printf '      %snote:%s emulation is on, so a passing arm64 run here does NOT prove a native\n' "$ylw" "$rst"
+      printf '            arm64 build. Check ELF arch (od -An -tx1 -j18 -N2 <bin>: 3e00=x86-64,\n'
+      printf '            b700=aarch64) and trust CI ubuntu-24.04-arm.\n'
     else
       skip 'aapt2 not runnable here; register emulation: docker run --privileged --rm tonistiigi/binfmt --install amd64'
     fi

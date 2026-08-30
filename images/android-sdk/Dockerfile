@@ -22,8 +22,9 @@ ENV ANDROID_SDK_ROOT=$ANDROID_HOME \
     PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools
 
 # comes from https://developer.android.com/studio/#command-line-tools-only
-# Opaque build number, this one is rev 23. scripts/check-android-sdk.sh watches it.
-ENV ANDROID_SDK_TOOLS_VERSION=16111833
+# Opaque build number, this one is rev 22. Held there: rev 23 drops license acceptance and
+# breaks flutter doctor (APPENDIX.md#no-android-cli). check-android-sdk.sh keeps flagging it.
+ENV ANDROID_SDK_TOOLS_VERSION=15859902
 
 # --- Build toolchain: system packages --------------------------------------
 # JDK + the deps to fetch and build with the Android SDK. jq and lcov are the
@@ -82,6 +83,8 @@ RUN cd /opt \
     && rm android-sdk-tools.zip
 
 # --- Build toolchain: licenses + platform-tools ----------------------------
+# sdkmanager, not the newer `android` CLI: that ships x86-64 only, so it cannot run on the
+# native arm64 build (APPENDIX.md#no-android-cli).
 RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers \
     && yes | sdkmanager --licenses \
     && mkdir -p /root/.android \
