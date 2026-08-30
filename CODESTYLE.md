@@ -13,6 +13,9 @@ Two habits cut across everything:
 - **Write like a person, not a brochure.** Short and plain beats thorough and formal. Say the thing
   once, skip the buzzwords, use contractions. No em-dashes and no semicolons in prose, they're the
   main tell that a machine wrote it. Applies to docs, comments, commit messages and PR bodies alike.
+- **Commit messages are one line.** Conventional-commit prefix, imperative, no body. If a change
+  needs a paragraph to explain, that paragraph belongs in [APPENDIX.md](APPENDIX.md) or the PR,
+  not in `git log`.
 - **Lint before "done".** `scripts/test.sh lint` runs hadolint, actionlint, shellcheck, biome, and
   a `versions.env` sanity check from the pinned Linterpol image. A change isn't done until
   it's clean.
