@@ -462,15 +462,16 @@ verified. A present manifest is not a verified build.
   | `ndk;28.2.13676358` | 722 MB | **2,207 MB** | the app template sets `ndkVersion = flutter.ndkVersion`; AGP wants the NDK even with zero native code |
   | `cmake;3.22.1` | 22 MB | 60 MB | AGP's built-in default, fetched alongside the NDK although a template app has no Android CMake project (its only `CMakeLists.txt` are Linux/Windows desktop) |
 
-- **The `apk` target caches them in named volumes** (`chrysalis-test-ndk`, `chrysalis-test-cmake`)
-  mounted at `$ANDROID_HOME/ndk` and `$ANDROID_HOME/cmake`. Subdirs only: a volume over the whole
-  `$ANDROID_HOME` would hide the baked SDK. Before this, every run re-downloaded the NDK and one
-  dropped connection killed the build (#52, seen 1 run in 4). Measured: cold 424s with one
+- **The `apk` target caches the NDK in a named volume** (`chrysalis-test-ndk`) mounted at
+  `$ANDROID_HOME/ndk`. That subdir only: a volume over the whole `$ANDROID_HOME` would hide the
+  baked SDK. Before this, every run re-downloaded the NDK and one dropped connection killed the
+  build (#52, seen 1 run in 4). Measured: cold 424s with one
   `Installing NDK`, warm 270s with none. Holds one NDK per Flutter version at ~2.9 GB, so it grows
   across bumps and `scripts/test.sh clean` drops it. `APK_CACHE=0` forces the cold path.
 - **The CMake row above is historical.** Measured on Flutter 3.44.8. On 3.47.1 a template app no
-  longer pulls CMake at all, and the cache volume stays empty. The mount and the guard's allowlist
-  both keep it anyway, in case AGP starts asking again.
+  longer pulls CMake at all: a cache volume mounted there came back with zero entries, so there is
+  nothing to cache and no CMake mount. The guard's allowlist still permits it, so if AGP starts
+  asking again the build stays green and the download simply comes back.
 - **Why baking them was rejected: runner caching already absorbs it.** Baking grows the `flutter`
   image from ~3.3 GB to ~5.5 GB unpacked on **both** arches, paid on every pull forever, to save a
   download that a warm SDK/Gradle cache pays once. Wrong side of the deal, and 5.5 GB is far

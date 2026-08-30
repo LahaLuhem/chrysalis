@@ -8,13 +8,13 @@
 #              with container-structure-test, plus a version-match and arch invariant.
 #   apk        Build a debug APK from a throwaway app in the flutter image, proving the
 #              Android toolchain works end to end (arm64 runs it under x86 emulation).
-#              Caches the NDK/CMake it downloads in named volumes (APK_CACHE=0 to skip).
+#              Caches the NDK it downloads in a named volume (APK_CACHE=0 to skip).
 #              Slow; opt-in, not part of `all`.
 #   multiarch  Build android-sdk for amd64 + arm64 (amd64 emulated) and assert the
 #              resulting manifest carries both arches. Slow; opt-in, not part of `all`.
 #   renovate   Schema-check .github/renovate.jsonc with renovate-config-validator, from the
 #              official renovate image. Big pull; opt-in, not part of `all`.
-#   clean      Remove the cache volumes the apk target creates (~2.2 GB per NDK version).
+#   clean      Remove the cache volume the apk target creates (~2.9 GB per NDK version).
 #   all        lint + image.
 #
 # Usage: scripts/test.sh [lint|image|apk|multiarch|renovate|clean|all]   (default: all)
@@ -166,9 +166,9 @@ run_lint() {
 img_android='chrysalis-test/android-sdk:local'
 img_flutter='chrysalis-test/flutter:local'
 
-# Named volumes holding the NDK/CMake the apk target downloads. `clean` removes them.
+# Named volume holding the NDK the apk target downloads. `clean` removes it. No CMake volume:
+# a template app stopped pulling CMake as of Flutter 3.47.1 (../APPENDIX.md#ndk-cmake-not-baked).
 apk_ndk_volume='chrysalis-test-ndk'
-apk_cmake_volume='chrysalis-test-cmake'
 
 # build_host_images: build android-sdk + flutter for the host arch into the tags above.
 build_host_images() {
@@ -271,7 +271,7 @@ run_apk() {
   # build (#52). Subdirs only: a volume over all of $ANDROID_HOME would hide the baked SDK.
   if [ "${APK_CACHE:-1}" != '0' ]; then
     android_home="$(docker run --rm "$img_flutter" printenv ANDROID_HOME)"
-    cache_args=(-v "$apk_ndk_volume:$android_home/ndk" -v "$apk_cmake_volume:$android_home/cmake")
+    cache_args=(-v "$apk_ndk_volume:$android_home/ndk")
   fi
 
   section 'flutter build apk --debug (throwaway app)'
@@ -392,23 +392,20 @@ run_renovate() {
   fi
 }
 
-# run_clean: drop the apk target's cache volumes. They hold one NDK per Flutter version
-# (~2.2 GB each), so they grow across bumps and nothing prunes them on its own.
+# run_clean: drop the apk target's cache volume. It holds one NDK per Flutter version
+# (~2.9 GB each), so it grows across bumps and nothing prunes it on its own.
 run_clean() {
   if ! command -v docker >/dev/null 2>&1; then
     printf '%smissing tool:%s docker  (start OrbStack / Docker Desktop)\n' "$red" "$rst"; exit 2
   fi
-  section 'remove apk cache volumes'
-  local v
-  for v in "$apk_ndk_volume" "$apk_cmake_volume"; do
-    if ! docker volume inspect "$v" >/dev/null 2>&1; then
-      skip "$v (not present)"
-    elif docker volume rm "$v" >/dev/null 2>&1; then
-      ok "removed $v"
-    else
-      bad "could not remove $v (still in use?)"
-    fi
-  done
+  section 'remove apk cache volume'
+  if ! docker volume inspect "$apk_ndk_volume" >/dev/null 2>&1; then
+    skip "$apk_ndk_volume (not present)"
+  elif docker volume rm "$apk_ndk_volume" >/dev/null 2>&1; then
+    ok "removed $apk_ndk_volume"
+  else
+    bad "could not remove $apk_ndk_volume (still in use?)"
+  fi
 }
 
 main() {

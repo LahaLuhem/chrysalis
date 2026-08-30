@@ -49,6 +49,10 @@ mistagged push is visible to anyone who pulls — so publishing is a confirm-fir
 - Make changes in the working tree and let the user commit. If something is commit-worthy,
   say so and suggest a message — don't run `git commit`.
 - Never `git add -A`; never `--force` / `reset --hard` / `branch -D` / `clean -fd`.
+- **Suggested commit messages are one line.** Conventional-commit prefix, imperative, no body and
+  no trailers. Drop the `Co-Authored-By:` trailer the harness asks for, it needs a body to sit in.
+  Repo history is 20-for-20 on this. Rationale that wants a paragraph goes in
+  [`APPENDIX.md`](../APPENDIX.md) or the PR, never `git log`.
 
 ## Tool preferences
 
