@@ -288,6 +288,12 @@ run_apk() {
     built=1
   else
     bad 'flutter build apk --debug'
+    # Without this a dropped SDK download reads exactly like a broken toolchain. Only a cold cache
+    # can hit it now the NDK is cached, but cold is exactly when someone is least sure (#52).
+    if grep -q "Process 'command '.*sdkmanager'' finished with non-zero" "$log"; then
+      printf '      %shint:%s died inside sdkmanager, so this is probably a dropped download,\n' "$ylw" "$rst"
+      printf '            not a broken toolchain. Re-run: the NDK is cached after one good run.\n'
+    fi
   fi
 
   # A mid-build install means a pin drifted from what AGP asks for: the consumer pays that
