@@ -88,10 +88,11 @@ chrysalis/
    [`APPENDIX.md#build-setup-android`](../APPENDIX.md#build-setup-android).
 2. **Registry is `ghcr.io/lahaluhem`** (lowercase). The package names — `flutter`,
    `android-sdk` — stay as-is.
-3. **`android-sdk` is the base for `flutter`.** Its multi-arch manifest list must be
-   **published before** the `flutter` matrix builds, so each per-arch `flutter` build
+3. **`android-sdk` is the base for `flutter`.** When both build, the base's multi-arch manifest
+   list must be **published before** the `flutter` matrix starts, so each per-arch `flutter` build
    resolves the matching base. Workflow order: build-android → merge-android → build-flutter
-   → merge-flutter.
+   → merge-flutter. The gate can skip android-sdk on its own, and flutter then builds on the base
+   already in the registry ([`APPENDIX.md#publish-gating`](../APPENDIX.md#publish-gating)).
 4. **Multi-arch is built natively, not via QEMU.** Matrix: amd64 on `ubuntu-latest`, arm64
    on `ubuntu-24.04-arm`. The single-job QEMU `platforms: linux/amd64,linux/arm64` approach
    is the documented *fallback* only. macOS runners cannot build Linux arm64.
@@ -142,6 +143,9 @@ chrysalis/
      `flutter:<version>` + `flutter:<x.y>` + `flutter:stable`. `<x.y>` is derived from
      `FLUTTER_VERSION` and follows that line's newest patch
      ([`APPENDIX.md#floating-minor-tag`](../APPENDIX.md#floating-minor-tag)).
+
+   Each image only runs when the change touched its own paths, so one can publish without the
+   other ([`APPENDIX.md#publish-gating`](../APPENDIX.md#publish-gating)).
 3. Weekly, Renovate (`.github/renovate.jsonc`) checks the stable Flutter channel; if it moved, it
    opens a PR bumping `versions.env`. Merging triggers a republish. Anything under a major automerges
    once `lint` + `images-ok` are green, so that republish can happen unattended. Majors wait for a
