@@ -299,14 +299,23 @@ verified. A present manifest is not a verified build.
   (`gh workflow run build_and_push.yml --ref <branch>`).
 - **Why not push on every branch:** concurrent branch builds would race on the same tags.
   Gating to `master` + explicit dispatch makes publishing intentional.
-- **Runs are further gated on image-affecting paths.** `prepare` classifies the changed files
-  (compare API for pushes, PR files API for pull requests) and skips the build jobs unless the
-  change touches `images/`, `versions.env`, `scripts/`, or the two build workflows. Anything else
-  (docs, `test.yml`, `.github/lint-tools.env`, `renovate.jsonc`) can't alter image bytes; before
-  this gate, such merges republished identical layers under fresh digests (the `created` label
-  changes every build), costing a full publish cycle plus registry churn each time. Manual
-  `workflow_dispatch` bypasses the gate, and any failure to list changed files fails open to
-  building, so the gate can only ever skip work, never a needed publish.
+- **Each image is gated on its own paths.** `prepare` lists the changed files (compare API for
+  pushes, PR files API for pull requests), then decides per image. android-sdk: its own dir,
+  `scripts/assert_*.sh` (those run inside the publish job), and the two build workflows. flutter:
+  all of that, since it builds `FROM` the base, plus its own dir and `versions.env`.
+  `scripts/test.sh` and `check-android-sdk.sh` are out on purpose. Neither is baked into an image
+  and neither runs in a publish, yet 3 of 12 consecutive master commits were `test.sh` edits that
+  republished both images.
+- **Why bother.** Every publish stamps a fresh `created` label, and that label lives inside the
+  hashed config blob, so a byte-identical rebuild still gets a new digest and still moves the tag.
+  Over the 63 master commits that follow the repo's first-day import, 50 republished both images
+  while only 10 touched `images/android-sdk/`. Replaying those same 63 through the new gate gives 23 android-sdk
+  builds and 40 flutter. Of the 23, only 10 are real content changes and 13 are pipeline edits,
+  mostly action digest bumps. Those stay in so the gate keeps the property below.
+- **The gate can only skip work, never a needed publish.** `workflow_dispatch` builds both, and
+  failing to list the changed files falls open to building both. flutter's `if` opens with
+  `!cancelled()`, which is what stops a *skipped* android-sdk from skipping flutter along with it.
+  A *failed* one still does.
 - **Verification:** a publish is only "done" once `docker manifest inspect <ref>` shows both
   `linux/amd64` and `linux/arm64`. Never report success without it.
 
