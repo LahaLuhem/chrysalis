@@ -64,10 +64,18 @@ mistagged push is visible to anyone who pulls — so publishing is a confirm-fir
 ## Validating arm64 (the main risk)
 
 The arm64 image's Android toolchain is x86-64 (AGENTS hard rule 5). When a change could
-affect arm64, **validate natively** — this is an Apple-Silicon host with OrbStack, so you
-can `docker buildx build --platform linux/arm64 … --load` and run the real tools, including
-`flutter build apk --debug` on a throwaway app. Report exactly what you verified and what
-you did NOT.
+affect arm64, build it here: `docker buildx build --platform linux/arm64 … --load`, then run
+the real tools, including `flutter build apk --debug` on a throwaway app.
+
+**A green local arm64 run does not prove the arm64 build works.** This host has x86-64 binfmt
+registered, so an x86-64 binary runs fine inside an arm64 container and looks native. A build
+step that shells out to one will pass here and fail on `ubuntu-24.04-arm`, which has no such
+emulation. It has happened (`APPENDIX.md#no-android-cli`). So for "does this run on arm64",
+read the ELF header instead of trusting the run:
+`od -An -tx1 -j18 -N2 <binary>` gives `3e00` for x86-64 and `b700` for aarch64. `scripts/test.sh
+image` warns when emulation is active. CI's arm64 leg is the only real authority.
+
+Report exactly what you verified and what you did NOT.
 
 ## Definition of done
 

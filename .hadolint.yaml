@@ -8,5 +8,5 @@ ignored:
   - DL3015  # --no-install-recommends is left off the inherited apt block by design
   - DL3003  # inherited single-RUN style; `cd /opt` inside it is fine
   - DL3047  # wget verbosity is cosmetic here
-  - DL4006  # `set -o pipefail` would break the `yes | sdkmanager` idiom these layers rely on
+  - DL4006  # `set -o pipefail` would break the `yes | sdkmanager --licenses` idiom
   - DL3007  # flutter image FROM android-sdk:latest is our own rolling base, on purpose
