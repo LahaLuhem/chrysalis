@@ -10,6 +10,7 @@
 - [OCI-native images](#oci-native-images)
 - [Publishing is gated to `master` and manual dispatch](#publish-gating)
 - [`flutter:<x.y>` follows the newest patch on its line](#floating-minor-tag)
+- [Every image gets an immutable `sha-<commit>` tag](#sha-tags)
 - [Version tracking via Renovate, not a bespoke cron](#renovate-version-tracking)
 - [Renovate automerges the boring tier, gated on one stable check](#renovate-automerge)
 - [`build-tools` is baked to match AGP; the NDK and CMake are deliberately not](#ndk-cmake-not-baked)
@@ -341,6 +342,34 @@ verified. A present manifest is not a verified build.
 - **Not doing:** a bare `3` tag, since Flutter has been 3.x since 2022 and it would just be
   `stable` again. Nor a second pin in `versions.env`, which can drift from `FLUTTER_VERSION`
   when we can derive it instead.
+
+---
+
+<a id="sha-tags"></a>
+## Every image gets an immutable `sha-<commit>` tag
+
+- **What:** each publish adds `sha-<first 7 of the commit>` next to the moving tags. android-sdk
+  puts it first, so `org.opencontainers.image.version` names the build instead of reading
+  `latest`. flutter puts it last, behind the exact version (tag order matters, see
+  [`#floating-minor-tag`](#floating-minor-tag)).
+- **Why:** nothing else in the registry stays put. Every publish writes a fresh `created` label
+  into the hashed config blob, so even an unchanged rebuild gets a new digest and every tag slides
+  onto it. `flutter:3.47.1` was found pointing at a commit 12 past the 3.47.1 bump, and android-sdk
+  only ever had `latest`. With no tag that stays, there's no rollback, no way to say which image a
+  build actually used, and a removal ([`#no-emulator`](#no-emulator)) lands on everyone at once.
+- **Why the commit and not a version.** android-sdk has no single version. It's the ubuntu digest
+  plus cmdline-tools plus platform 36 plus build-tools 36.0.0, and those barely move.
+  `ANDROID_PLATFORM_VERSION` and `ANDROID_BUILD_TOOLS_VERSION` have never changed, while `latest`
+  moved 45 times in 65 days. So an `android-sdk:36` tag would read like a pin and behave like
+  `latest`, which is worse than not having one. The pins don't describe the image fully anyway,
+  since `sdkmanager platform-tools` and apt each grab whatever is newest at build time.
+- **Not bulletproof.** Re-running the workflow on the same commit re-points that commit's tag,
+  because the rebuild gets a new `created` stamp. That needs a deliberate `workflow_dispatch`, so
+  it won't happen by accident. They also pile up, roughly 380 a year across both packages.
+- **Known gap:** [`images/flutter/Dockerfile`](./images/flutter/Dockerfile) still starts
+  `FROM ghcr.io/lahaluhem/android-sdk:latest`. The per-image gate makes android-sdk publish before
+  flutter within the same run, so a run is self-consistent. Pinning it to a sha would mean looking
+  up the last android-sdk publish, and that machinery isn't worth it yet.
 
 ---
 
