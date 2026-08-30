@@ -43,7 +43,7 @@ RUN flutter doctor \
 # renovate: datasource=dart depName=cider
 ENV CIDER_VERSION=0.2.10
 # renovate: datasource=dart depName=dependency_validator
-ENV DEPENDENCY_VALIDATOR_VERSION=5.0.5
+ENV DEPENDENCY_VALIDATOR_VERSION=5.0.6
 # Activate (resolve + download + generate package_config), compile the resolved entrypoint to a native
 # binary, then deactivate and drop the cache artifacts so the snapshot/sources don't ship in the image.
 RUN set -eux; \

@@ -105,6 +105,6 @@ RUN yes | sdkmanager \
 # dependency_validator.yaml, slang, ...). Static Go binary from mikefarah/yq, arch-matched
 # (its amd64/arm64 asset names are exactly Docker's TARGETARCH). Renovate-tracked (github-releases).
 # renovate: datasource=github-releases depName=mikefarah/yq
-ENV YQ_VERSION=v4.53.3
+ENV YQ_VERSION=v4.53.6
 RUN wget -q "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_${TARGETARCH}" -O /usr/local/bin/yq \
     && chmod +x /usr/local/bin/yq
