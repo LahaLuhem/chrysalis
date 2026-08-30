@@ -28,6 +28,11 @@
       "automerge": true
     },
     {
+      "description": "Flutter ships a stable roughly every 8 days and republishing when it moves is this repo's job, so don't park its PR until the Monday window. Only this pin is exempt; the batched groups below still want the weekly pass.",
+      "matchDatasources": ["flutter-version"],
+      "schedule": ["at any time"]
+    },
+    {
       "description": "Only track Ubuntu LTS (even year + .04). An interim release like 26.10 counts as a minor and would automerge, but it gets 9 months of support instead of 5 years and nothing in CI can spot that.",
       "matchDatasources": ["docker"],
       "matchPackageNames": ["ubuntu"],

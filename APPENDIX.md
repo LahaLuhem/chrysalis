@@ -433,8 +433,11 @@ verified. A present manifest is not a verified build.
   sets `pinDigests: false` for it. Publishes never lean on the fallback, they pass a resolved
   digest ([`#pinned-base`](#pinned-base)). `ubuntu:24.04` stays digest-pinned, which is multi-arch-safe because
   Renovate pins the manifest-list digest.
-- **Cadence:** weekly (`schedule:weekly`), down from the old every-2h cron. Stable Flutter ships
-  roughly quarterly, so frequent polling was wasteful.
+- **Cadence:** weekly (`schedule:weekly`, a four-hour window early on Mondays), down from the old
+  every-2h cron. Flutter is exempt via a `packageRule` on its datasource, because it ships a stable
+  about every 8 days (12 of them between 2026-06-01 and 2026-08-27) and republishing when it moves
+  is the whole job. Renovate spots a release within the hour but parks the PR until the window, so
+  the exemption is worth up to a week. Everything else stays batched.
 - **CI lint tools:** all four linters (hadolint, actionlint, shellcheck, biome) plus
   `container-structure-test` come from one image, [Linterpol](https://github.com/LahaLuhem/linterpol),
   pinned as `LINTERPOL_IMAGE` in [`.github/lint-tools.env`](./.github/lint-tools.env) and tracked by a

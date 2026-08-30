@@ -317,10 +317,10 @@ few tools run emulated while everything else stays native. The full story is in
 
 ## Staying current
 
-[Renovate](https://docs.renovatebot.com) checks weekly for new stable Flutter releases
-and opens a PR bumping [`versions.env`](versions.env). Merge it, and the images rebuild on
-the new version. The same config keeps the GitHub Actions pins and the `ubuntu` base image
-current.
+[Renovate](https://docs.renovatebot.com) watches the stable Flutter channel and opens a PR bumping
+[`versions.env`](versions.env) as soon as a release lands. Merge it, and the images rebuild on the
+new version. The GitHub Actions pins and the `ubuntu` base are kept current too, batched into a
+weekly pass.
 
 Anything under a major automerges once CI is green, so `flutter:stable` keeps up on its own.
 Majors wait for a human ([APPENDIX.md](APPENDIX.md#renovate-automerge)).
