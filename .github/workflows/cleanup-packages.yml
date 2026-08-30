@@ -1,18 +1,14 @@
 name: Cleanup old package versions
 
-# Each republish moves the shared moving tags (flutter:stable, android-sdk:latest) onto a fresh
-# multi-arch index and orphans the one they pointed at, so untagged versions pile up across both
-# GHCR packages (flutter, android-sdk). This prunes them on a weekly cron: it keeps the 10 newest
-# untagged generations per package and never deletes anything younger than 30 days, a safe margin
-# for a digest a consumer has sha-pinned (they get at least that long to bump off it). Tagged
-# versions are left alone, so flutter:stable, the per-version flutter:<x.y.z> tags, android-sdk:latest
-# and their per-arch children all survive; only untagged versions are in scope.
+# Two weekly prunes across the flutter and android-sdk packages.
 #
-# This actively prunes (dry-run is off). Deleting published versions is outward-facing, so if you
-# want to preview a run, set dry-run to true first and it only logs what it WOULD delete.
+# Untagged: publishes used to orphan the index their moving tag left behind. Every publish now also
+# carries a sha-<commit> tag (APPENDIX.md#sha-tags), so that mostly stopped and this is down to
+# catching half-finished pushes.
 #
-# Longer-term fix: immutable per-build tags, so consumers pin a retained tag instead of a :latest
-# digest and cleanup needs no age/keep guards. Tracked separately.
+# sha tags: nothing else would ever clear them. Safe next to the version tags, because the action
+# unlinks a tag whose image carries others and drops the image only once its last tag goes. So
+# pruning sha-x off an index still tagged 3.47.1 loses just the one tag.
 
 on:
   schedule:
@@ -38,4 +34,14 @@ jobs:
           packages: flutter,android-sdk
           keep-n-untagged: 10
           older-than: "30 days"
+          dry-run: false
+
+      - name: Prune sha tags (keep newest 20, nothing younger than 6 months)
+        uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f # v1
+        with:
+          packages: flutter,android-sdk
+          delete-tags: "sha-*"
+          exclude-tags: latest,stable
+          keep-n-tagged: 20
+          older-than: "6 months"
           dry-run: false

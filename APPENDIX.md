@@ -350,30 +350,30 @@ verified. A present manifest is not a verified build.
 ## Every image gets an immutable `sha-<commit>` tag
 
 - **What:** each publish adds `sha-<first 7 of the commit>` next to the moving tags. android-sdk
-  puts it first, so `org.opencontainers.image.version` names the build instead of reading
-  `latest`. flutter puts it last, behind the exact version (tag order matters, see
-  [`#floating-minor-tag`](#floating-minor-tag)).
+  puts it first so `org.opencontainers.image.version` names the build instead of reading `latest`,
+  flutter last behind the exact version ([`#floating-minor-tag`](#floating-minor-tag)).
 - **Why:** nothing else in the registry stays put. Every publish writes a fresh `created` label
   into the hashed config blob, so even an unchanged rebuild gets a new digest and every tag slides
   onto it. `flutter:3.47.1` was found sitting 12 commits past the 3.47.1 bump. With no fixed tag
   there's no rollback and no way to say which image a build used.
-- **Why the commit and not a version.** android-sdk has no single version, and the pins it does
-  have barely move: `ANDROID_PLATFORM_VERSION` and `ANDROID_BUILD_TOOLS_VERSION` have never
-  changed, while `latest` moved 45 times in 65 days. An `android-sdk:36` tag would read like a pin
-  and behave like `latest`. The pins don't describe the image fully anyway, since
-  `sdkmanager platform-tools` and apt both grab whatever is newest at build time.
-- **Not bulletproof.** Re-running the workflow on the same commit re-points that commit's tag, and
-  they pile up at roughly 380 a year across both packages.
+- **Why the commit and not a version.** android-sdk has no single version, and its pins barely
+  move: `ANDROID_PLATFORM_VERSION` and `ANDROID_BUILD_TOOLS_VERSION` have never changed while
+  `latest` moved 45 times in 65 days, so `android-sdk:36` would read like a pin and behave like
+  `latest`. They don't describe the image fully anyway, since `sdkmanager platform-tools` and apt
+  both grab whatever is newest at build time.
+- **Not bulletproof.** A re-run on the same commit re-points that commit's tag. They also pile up
+  at ~380 a year, so [`cleanup-packages.yml`](./.github/workflows/cleanup-packages.yml) drops them
+  after six months.
 
 ---
 
 <a id="pinned-base"></a>
 ## `flutter` is built on a pinned `android-sdk` digest
 
-- **What:** [`images/flutter/Dockerfile`](./images/flutter/Dockerfile) takes a `base_ref` build arg
-  and does `FROM ${base_ref}`. A small `base` job resolves `android-sdk:latest` to its index digest
-  once, and both arch builds get that same `name@sha256:...`. The arg defaults to the `:latest`
-  tag so a plain `docker build` still works, and `scripts/test.sh` passes the image it just built.
+- **What:** [`images/flutter/Dockerfile`](./images/flutter/Dockerfile) does `FROM ${base_ref}`. A
+  `base` job resolves `android-sdk:latest` to its index digest once, and both arch builds get that
+  same `name@sha256:...`. The arg defaults to the `:latest` tag so a plain `docker build` still
+  works, and `scripts/test.sh` passes the image it just built.
 - **Why:** the two arch legs used to resolve `:latest` themselves, on separate runners, with
   nothing making them agree. A publish racing another one could ship an amd64 half and an arm64
   half built on different bases.
@@ -388,21 +388,19 @@ verified. A present manifest is not a verified build.
 ## PRs build `flutter` on the android-sdk from the same checkout
 
 - **The hole:** flutter used to build only on publishes, so a Renovate `versions.env` bump
-  automerged having validated nothing about the flutter image. Building it on PRs was rejected
-  because the only base available was the published `android-sdk:latest`, the wrong one on a PR
-  that changes android-sdk too.
+  automerged having validated nothing about it. Building it on PRs was rejected because the only
+  base available was the published `android-sdk:latest`, wrong on a PR that changes android-sdk.
 - **What changed:** `base_ref` ([`#pinned-base`](#pinned-base)) lets a flutter build sit on any
   android-sdk, pushed or not. On a non-publish run `build-image.yml` builds the base from this
   checkout and hands it over, driven by two optional inputs, `base-name` and `base-context`.
 - **Why an OCI layout and not a loaded tag.** `setup-buildx-action` gives us a **docker-container**
   builder, which resolves `FROM` against registries only. A tag in the runner's daemon is invisible
   to it, and so is `--build-context ref=docker-image://<local tag>`. Both fail with
-  `pull access denied`. Only `--build-context <name>=oci-layout://<dir>` works. A local check
-  proves nothing here: a dev box's default builder is usually the `docker` driver, which shares the
-  daemon's images and hides the problem.
+  `pull access denied`. Only `--build-context <name>=oci-layout://<dir>` works. A local check won't
+  show this: a dev box's default builder is usually the `docker` driver, which shares the daemon's
+  images and hides the problem.
 - **Cost:** on a fully cached run, 32s to rebuild the base and 4s to export it, on top of flutter's
-  own 85s. Both jobs share the `android-sdk-<arch>` cache scope. Publishes skip all of it and build
-  `FROM` the resolved digest.
+  own 85s. Both jobs share the `android-sdk-<arch>` cache scope. Publishes skip it all.
 
 ---
 
