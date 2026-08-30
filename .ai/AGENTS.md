@@ -90,9 +90,11 @@ chrysalis/
    `android-sdk` — stay as-is.
 3. **`android-sdk` is the base for `flutter`.** When both build, the base's multi-arch manifest
    list must be **published before** the `flutter` matrix starts, so each per-arch `flutter` build
-   resolves the matching base. Workflow order: build-android → merge-android → build-flutter
-   → merge-flutter. The gate can skip android-sdk on its own, and flutter then builds on the base
-   already in the registry ([`APPENDIX.md#publish-gating`](../APPENDIX.md#publish-gating)).
+   resolves the matching base. Workflow order: build-android → merge-android → resolve-base →
+   build-flutter → merge-flutter. The gate can skip android-sdk on its own, and flutter then
+   builds on the base already in the registry
+   ([`APPENDIX.md#publish-gating`](../APPENDIX.md#publish-gating)). The base is pinned to a digest,
+   not a tag ([`APPENDIX.md#pinned-base`](../APPENDIX.md#pinned-base)).
 4. **Multi-arch is built natively, not via QEMU.** Matrix: amd64 on `ubuntu-latest`, arm64
    on `ubuntu-24.04-arm`. The single-job QEMU `platforms: linux/amd64,linux/arm64` approach
    is the documented *fallback* only. macOS runners cannot build Linux arm64.

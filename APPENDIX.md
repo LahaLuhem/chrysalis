@@ -11,6 +11,7 @@
 - [Publishing is gated to `master` and manual dispatch](#publish-gating)
 - [`flutter:<x.y>` follows the newest patch on its line](#floating-minor-tag)
 - [Every image gets an immutable `sha-<commit>` tag](#sha-tags)
+- [`flutter` is built on a pinned `android-sdk` digest](#pinned-base)
 - [Version tracking via Renovate, not a bespoke cron](#renovate-version-tracking)
 - [Renovate automerges the boring tier, gated on one stable check](#renovate-automerge)
 - [`build-tools` is baked to match AGP; the NDK and CMake are deliberately not](#ndk-cmake-not-baked)
@@ -248,11 +249,10 @@ verified. A present manifest is not a verified build.
   artifact, and a merge job assembles the per-arch digests into one manifest list with
   `docker buildx imagetools create`. This is the canonical Docker pattern for distributing a
   multi-platform build across native runners.
-- **`android-sdk` is published before `flutter` builds.** Because `images/flutter/Dockerfile` is
-  `FROM ghcr.io/lahaluhem/android-sdk:latest`, that tag must already be a manifest list when
-  the `flutter` matrix runs, so each per-arch `flutter` build pulls the matching base
-  automatically. Hence the job order build-android → merge-android → build-flutter →
-  merge-flutter.
+- **`android-sdk` is published before `flutter` builds.** `flutter` builds `FROM` an android-sdk
+  digest, and that digest has to be a manifest list by the time the `flutter` matrix runs, so each
+  per-arch build pulls the matching base on its own. Hence the job order build-android →
+  merge-android → resolve-base → build-flutter → merge-flutter ([`#pinned-base`](#pinned-base)).
 - **`provenance: false`.** Provenance/SBOM attestations add `unknown/unknown` entries to the
   manifest list that muddy `docker manifest inspect`; disabling them keeps the manifest to
   exactly the two platform images.
@@ -366,10 +366,27 @@ verified. A present manifest is not a verified build.
 - **Not bulletproof.** Re-running the workflow on the same commit re-points that commit's tag,
   because the rebuild gets a new `created` stamp. That needs a deliberate `workflow_dispatch`, so
   it won't happen by accident. They also pile up, roughly 380 a year across both packages.
-- **Known gap:** [`images/flutter/Dockerfile`](./images/flutter/Dockerfile) still starts
-  `FROM ghcr.io/lahaluhem/android-sdk:latest`. The per-image gate makes android-sdk publish before
-  flutter within the same run, so a run is self-consistent. Pinning it to a sha would mean looking
-  up the last android-sdk publish, and that machinery isn't worth it yet.
+
+---
+
+<a id="pinned-base"></a>
+## `flutter` is built on a pinned `android-sdk` digest
+
+- **What:** [`images/flutter/Dockerfile`](./images/flutter/Dockerfile) takes a `base_ref` build arg
+  and does `FROM ${base_ref}`. A small `base` job resolves `android-sdk:latest` to its index digest
+  once, and both arch builds get that same `name@sha256:...`. The arg defaults to the `:latest` tag
+  so a plain `docker build images/flutter` still works, and `scripts/test.sh` passes the image it
+  just built locally.
+- **Why:** the two arch legs used to resolve `:latest` themselves, on separate runners, with
+  nothing saying they had to get the same answer. A publish racing another one could ship an amd64
+  half and an arm64 half built on different bases. One resolve, one digest, both legs agree. The
+  flutter image also now records which base it used instead of "whatever `latest` was".
+- **Why resolve instead of plumbing the digest through.** The per-image gate
+  ([`#publish-gating`](#publish-gating)) can skip android-sdk, so there isn't always a digest from
+  this run to pass along. Reading `:latest` once android-sdk has settled covers both cases with one
+  code path. It's this run's image when android-sdk built, and the previous publish when it didn't.
+- **The `base` job holds flutter's gate.** It carries the `!cancelled()` condition, so the flutter
+  job just needs `base` to have succeeded. A skipped or failed base skips flutter along with it.
 
 ---
 
@@ -397,9 +414,10 @@ verified. A present manifest is not a verified build.
   `.pre` beta. The `versions.env` lint in `scripts/test.sh` is a backstop that rejects any
   non-`x.y.z` value.
 - **One exclusion:** `docker:pinDigests` (pulled in by `best-practices`) would pin every `FROM`,
-  including the internal `ghcr.io/lahaluhem/android-sdk:latest` the flutter image builds on. That
-  tag is rebuilt and republished every run and must float, so a `packageRule` sets
-  `pinDigests: false` for it. `ubuntu:24.04` stays digest-pinned, which is multi-arch-safe because
+  including the `ghcr.io/lahaluhem/android-sdk:latest` that the flutter image falls back to when
+  nothing passes `base_ref`. That tag is republished every run and must float, so a `packageRule`
+  sets `pinDigests: false` for it. Publishes never lean on the fallback, they pass a resolved
+  digest ([`#pinned-base`](#pinned-base)). `ubuntu:24.04` stays digest-pinned, which is multi-arch-safe because
   Renovate pins the manifest-list digest.
 - **Cadence:** weekly (`schedule:weekly`), down from the old every-2h cron. Stable Flutter ships
   roughly quarterly, so frequent polling was wasteful.
@@ -471,10 +489,14 @@ verified. A present manifest is not a verified build.
   default (a merge commit) would be rejected. It also needs "Allow rebase merging" enabled on the
   repo: with it off, GitHub refuses the auto-merge call and Renovate falls back to its own
   automerge, which merges on its own reading of branch status rather than the ruleset's.
-- **Rejected: building `flutter` on pull requests** to close the validation gap above. It would
-  have to build `FROM` the already-published `android-sdk:latest`, so on a PR that also changes
-  `android-sdk` it would validate against the wrong base and still report a pass. False confidence
-  is worse than a known gap.
+- **Building `flutter` on pull requests: rejected once, now only a cost question.** The old reason
+  was that a PR build would have to sit on the already-published `android-sdk:latest`, so a PR
+  touching both images would check against the wrong base and pass anyway. `base_ref`
+  ([`#pinned-base`](#pinned-base)) kills that reason. A flutter build can be pointed at an
+  android-sdk that was never pushed, and `scripts/test.sh` does exactly that. What's left is time:
+  flutter's job would have to rebuild its base from the shared gha cache, measured at 40s per arch
+  on a fully cached run, on top of flutter's own 85s. Not wired up. For scale, a PR changing both
+  images is 4 of the 63 commits since the first-day import.
 - **Rejected: decoupling publish from merge** (publish on a tag, as linterpol does). That would
   make automerge trivially safe, but this repo exists to republish when Flutter moves, so it would
   only relocate the manual step from merging the PR to cutting the tag.
