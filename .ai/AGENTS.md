@@ -162,8 +162,8 @@ chrysalis/
   Build-Tools` line in the output means the pin is wrong. Slow and opt-in, not part of `all`.
 - `scripts/test.sh multiarch` builds `android-sdk` for amd64 + arm64 (amd64 emulated) and
   asserts the resulting manifest carries both arches. Slow and opt-in, not part of `all`.
-- `scripts/test.sh clean` removes the cache volumes the `apk` target creates (~2.9 GB per NDK
-  version, and nothing prunes them on its own).
+- `scripts/test.sh clean` removes the cache volume the `apk` target creates (~2.9 GB per NDK
+  version, and nothing prunes it on its own).
 - `scripts/test.sh renovate` schema-checks `.github/renovate.jsonc` with `renovate-config-validator`
   from the official renovate image. Big pull, opt-in, not part of `all`.
 - `scripts/test.sh all` runs lint + image.
