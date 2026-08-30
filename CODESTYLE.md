@@ -25,9 +25,8 @@ Two habits cut across everything:
 - Group layers with `# --- Section ---` banners (one `RUN` per logical stage, `&&`-chained)
   and a top-of-file comment naming them (see `images/android-sdk/Dockerfile`).
 - Pin every upstream `FROM` as `tag@sha256:<digest>`: the tag is the readable version, the
-  digest makes the build reproducible. Our own base is an exception in form only: `flutter` does
-  `FROM ${base_ref}` and the publish workflow feeds it a resolved digest
-  (`APPENDIX.md#pinned-base`). The tag default is a fallback for a plain local build.
+  digest makes the build reproducible. Our own base is `FROM ${base_ref}`, and CI feeds it a
+  resolved digest (`APPENDIX.md#pinned-base`). The tag default is only for local builds.
 - `USER root`; these are build/CI images, not services (DL3002 on purpose).
 - `LABEL org.opencontainers.image.source` + `.description` near the top.
 - `ENV` names are UPPERCASE and grouped with `\` continuation; `ARG` names are lowercase

@@ -12,6 +12,7 @@
 - [`flutter:<x.y>` follows the newest patch on its line](#floating-minor-tag)
 - [Every image gets an immutable `sha-<commit>` tag](#sha-tags)
 - [`flutter` is built on a pinned `android-sdk` digest](#pinned-base)
+- [PRs build `flutter` on the android-sdk from the same checkout](#pr-flutter-build)
 - [Version tracking via Renovate, not a bespoke cron](#renovate-version-tracking)
 - [Renovate automerges the boring tier, gated on one stable check](#renovate-automerge)
 - [`build-tools` is baked to match AGP; the NDK and CMake are deliberately not](#ndk-cmake-not-baked)
@@ -304,19 +305,19 @@ verified. A present manifest is not a verified build.
   pushes, PR files API for pull requests), then decides per image. android-sdk: its own dir,
   `scripts/assert_*.sh` (those run inside the publish job), and the two build workflows. flutter:
   all of that, since it builds `FROM` the base, plus its own dir and `versions.env`.
-  `scripts/test.sh` and `check-android-sdk.sh` are out on purpose. Neither is baked into an image
-  and neither runs in a publish, yet 3 of 12 consecutive master commits were `test.sh` edits that
-  republished both images.
-- **Why bother.** Every publish stamps a fresh `created` label, and that label lives inside the
-  hashed config blob, so a byte-identical rebuild still gets a new digest and still moves the tag.
-  Over the 63 master commits that follow the repo's first-day import, 50 republished both images
-  while only 10 touched `images/android-sdk/`. Replaying those same 63 through the new gate gives 23 android-sdk
-  builds and 40 flutter. Of the 23, only 10 are real content changes and 13 are pipeline edits,
-  mostly action digest bumps. Those stay in so the gate keeps the property below.
+  `scripts/test.sh` and `check-android-sdk.sh` are out on purpose: neither is baked and neither
+  runs in a publish, yet 3 of 12 consecutive master commits were `test.sh` edits that republished
+  both images.
+- **Why bother.** Every publish stamps a fresh `created` label inside the hashed config blob, so a
+  byte-identical rebuild still gets a new digest and still moves the tag. Of the 63 master commits
+  after the first-day import, 50 republished both images while only 10 touched
+  `images/android-sdk/`. Replayed through the new gate they give 23 android-sdk builds and 40
+  flutter. 13 of those 23 are pipeline edits rather than content, kept in so the gate keeps the
+  property below.
 - **The gate can only skip work, never a needed publish.** `workflow_dispatch` builds both, and
-  failing to list the changed files falls open to building both. flutter's `if` opens with
-  `!cancelled()`, which is what stops a *skipped* android-sdk from skipping flutter along with it.
-  A *failed* one still does.
+  failing to list the changed files falls open to building both. The downstream jobs open their
+  `if` with `!cancelled()`, so a *skipped* android-sdk doesn't skip them along with it. A *failed*
+  one still does.
 - **Verification:** a publish is only "done" once `docker manifest inspect <ref>` shows both
   `linux/amd64` and `linux/arm64`. Never report success without it.
 
@@ -333,8 +334,8 @@ verified. A present manifest is not a verified build.
   one lands, or pin an exact version and bump it every week. This sits in between.
 - **Keep the exact version first in the tag list.** It's what ends up in the image's version
   label, and the merge job's inspect and verify steps only look at the first tag. Flip the order
-  and every image claims to be `3.47` while the OCI checks run against the wrong ref. CI won't
-  catch it either, since flutter never builds on PRs, so the tag list is first tried on the
+  and every image claims to be `3.47` while the OCI checks run against the wrong ref. A PR won't
+  catch it either. PRs build flutter but never tag it, so the tag list is first tried on the
   publish after merge.
 - **Old `<x.y>` tags go quiet.** `3.44` sits at `3.44.9` forever once 3.47 ships, and nobody gets
   told. That matches how Flutter works: a minor line is done when the next one starts (checked
@@ -354,18 +355,15 @@ verified. A present manifest is not a verified build.
   [`#floating-minor-tag`](#floating-minor-tag)).
 - **Why:** nothing else in the registry stays put. Every publish writes a fresh `created` label
   into the hashed config blob, so even an unchanged rebuild gets a new digest and every tag slides
-  onto it. `flutter:3.47.1` was found pointing at a commit 12 past the 3.47.1 bump, and android-sdk
-  only ever had `latest`. With no tag that stays, there's no rollback, no way to say which image a
-  build actually used, and a removal ([`#no-emulator`](#no-emulator)) lands on everyone at once.
-- **Why the commit and not a version.** android-sdk has no single version. It's the ubuntu digest
-  plus cmdline-tools plus platform 36 plus build-tools 36.0.0, and those barely move.
-  `ANDROID_PLATFORM_VERSION` and `ANDROID_BUILD_TOOLS_VERSION` have never changed, while `latest`
-  moved 45 times in 65 days. So an `android-sdk:36` tag would read like a pin and behave like
-  `latest`, which is worse than not having one. The pins don't describe the image fully anyway,
-  since `sdkmanager platform-tools` and apt each grab whatever is newest at build time.
-- **Not bulletproof.** Re-running the workflow on the same commit re-points that commit's tag,
-  because the rebuild gets a new `created` stamp. That needs a deliberate `workflow_dispatch`, so
-  it won't happen by accident. They also pile up, roughly 380 a year across both packages.
+  onto it. `flutter:3.47.1` was found sitting 12 commits past the 3.47.1 bump. With no fixed tag
+  there's no rollback and no way to say which image a build used.
+- **Why the commit and not a version.** android-sdk has no single version, and the pins it does
+  have barely move: `ANDROID_PLATFORM_VERSION` and `ANDROID_BUILD_TOOLS_VERSION` have never
+  changed, while `latest` moved 45 times in 65 days. An `android-sdk:36` tag would read like a pin
+  and behave like `latest`. The pins don't describe the image fully anyway, since
+  `sdkmanager platform-tools` and apt both grab whatever is newest at build time.
+- **Not bulletproof.** Re-running the workflow on the same commit re-points that commit's tag, and
+  they pile up at roughly 380 a year across both packages.
 
 ---
 
@@ -374,19 +372,37 @@ verified. A present manifest is not a verified build.
 
 - **What:** [`images/flutter/Dockerfile`](./images/flutter/Dockerfile) takes a `base_ref` build arg
   and does `FROM ${base_ref}`. A small `base` job resolves `android-sdk:latest` to its index digest
-  once, and both arch builds get that same `name@sha256:...`. The arg defaults to the `:latest` tag
-  so a plain `docker build images/flutter` still works, and `scripts/test.sh` passes the image it
-  just built locally.
+  once, and both arch builds get that same `name@sha256:...`. The arg defaults to the `:latest`
+  tag so a plain `docker build` still works, and `scripts/test.sh` passes the image it just built.
 - **Why:** the two arch legs used to resolve `:latest` themselves, on separate runners, with
-  nothing saying they had to get the same answer. A publish racing another one could ship an amd64
-  half and an arm64 half built on different bases. One resolve, one digest, both legs agree. The
-  flutter image also now records which base it used instead of "whatever `latest` was".
+  nothing making them agree. A publish racing another one could ship an amd64 half and an arm64
+  half built on different bases.
 - **Why resolve instead of plumbing the digest through.** The per-image gate
   ([`#publish-gating`](#publish-gating)) can skip android-sdk, so there isn't always a digest from
-  this run to pass along. Reading `:latest` once android-sdk has settled covers both cases with one
-  code path. It's this run's image when android-sdk built, and the previous publish when it didn't.
-- **The `base` job holds flutter's gate.** It carries the `!cancelled()` condition, so the flutter
-  job just needs `base` to have succeeded. A skipped or failed base skips flutter along with it.
+  this run to pass on. Reading `:latest` once android-sdk has settled covers both cases with one
+  code path.
+
+---
+
+<a id="pr-flutter-build"></a>
+## PRs build `flutter` on the android-sdk from the same checkout
+
+- **The hole:** flutter used to build only on publishes, so a Renovate `versions.env` bump
+  automerged having validated nothing about the flutter image. Building it on PRs was rejected
+  because the only base available was the published `android-sdk:latest`, the wrong one on a PR
+  that changes android-sdk too.
+- **What changed:** `base_ref` ([`#pinned-base`](#pinned-base)) lets a flutter build sit on any
+  android-sdk, pushed or not. On a non-publish run `build-image.yml` builds the base from this
+  checkout and hands it over, driven by two optional inputs, `base-name` and `base-context`.
+- **Why an OCI layout and not a loaded tag.** `setup-buildx-action` gives us a **docker-container**
+  builder, which resolves `FROM` against registries only. A tag in the runner's daemon is invisible
+  to it, and so is `--build-context ref=docker-image://<local tag>`. Both fail with
+  `pull access denied`. Only `--build-context <name>=oci-layout://<dir>` works. A local check
+  proves nothing here: a dev box's default builder is usually the `docker` driver, which shares the
+  daemon's images and hides the problem.
+- **Cost:** on a fully cached run, 32s to rebuild the base and 4s to export it, on top of flutter's
+  own 85s. Both jobs share the `android-sdk-<arch>` cache scope. Publishes skip all of it and build
+  `FROM` the resolved digest.
 
 ---
 
@@ -452,9 +468,9 @@ verified. A present manifest is not a verified build.
 <a id="renovate-automerge"></a>
 ## Renovate automerges the boring tier, gated on one stable check
 
-- **Decision:** Renovate automerges `digest`, `pin`, `pinDigest`, and `patch` updates via GitHub's
-  native auto-merge (`platformAutomerge`, `automergeStrategy: "rebase"`). `minor` and `major` still
-  come to a human. Config: [`.github/renovate.jsonc`](./.github/renovate.jsonc).
+- **Decision:** Renovate automerges everything under a major via GitHub's native auto-merge
+  (`platformAutomerge`, `automergeStrategy: "rebase"`). `major` still comes to a human. Config:
+  [`.github/renovate.jsonc`](./.github/renovate.jsonc).
 - **Why:** hand-merging a weekly digest re-pin is toil with no judgement in it. Copied from the
   sibling [`linterpol`](https://github.com/LahaLuhem/linterpol) repo, with one difference that
   matters (next bullet).
@@ -463,8 +479,9 @@ verified. A present manifest is not a verified build.
   because `build-image.yml` structure-tests both arches *before* it pushes, and the manifest merge
   only runs once both legs pass. A bad bump costs a red `master`, never a bad tag.
 - **Why `minor` automerges too:** CI is the guard and it doesn't care what kind of bump it is.
-  `android-sdk` is built and structure-tested on the PR, `flutter` on the publish run before
-  anything is pushed, so a bad minor costs a red `master` and nothing else. The old worry, that a
+  Both images are built and structure-tested on the PR now, on both arches
+  ([`#pr-flutter-build`](#pr-flutter-build)), so a bad minor is caught before the merge rather
+  than after it. The old worry, that a
   minor moves the toolchain under every consumer, is the tag's job now: pin `flutter:<x.y>`
   ([#floating-minor-tag](#floating-minor-tag)). `major` still waits for a human.
 - **`ubuntu` is held to LTS tags.** `26.04` to `26.10` reads as a *minor*, so it would ride along
@@ -489,14 +506,12 @@ verified. A present manifest is not a verified build.
   default (a merge commit) would be rejected. It also needs "Allow rebase merging" enabled on the
   repo: with it off, GitHub refuses the auto-merge call and Renovate falls back to its own
   automerge, which merges on its own reading of branch status rather than the ruleset's.
-- **Building `flutter` on pull requests: rejected once, now only a cost question.** The old reason
-  was that a PR build would have to sit on the already-published `android-sdk:latest`, so a PR
-  touching both images would check against the wrong base and pass anyway. `base_ref`
-  ([`#pinned-base`](#pinned-base)) kills that reason. A flutter build can be pointed at an
-  android-sdk that was never pushed, and `scripts/test.sh` does exactly that. What's left is time:
-  flutter's job would have to rebuild its base from the shared gha cache, measured at 40s per arch
-  on a fully cached run, on top of flutter's own 85s. Not wired up. For scale, a PR changing both
-  images is 4 of the 63 commits since the first-day import.
+- **Was rejected, now done: building `flutter` on pull requests.** The old reason was that a PR
+  build would have to sit on the already-published `android-sdk:latest`, so a PR touching both
+  images would check against the wrong base and pass anyway. `base_ref`
+  ([`#pinned-base`](#pinned-base)) killed that reason, and PRs now build flutter on the
+  android-sdk from the same checkout ([`#pr-flutter-build`](#pr-flutter-build)). A `versions.env`
+  bump no longer automerges on zero flutter validation.
 - **Rejected: decoupling publish from merge** (publish on a tag, as linterpol does). That would
   make automerge trivially safe, but this repo exists to republish when Flutter moves, so it would
   only relocate the manual step from merging the PR to cutting the tag.

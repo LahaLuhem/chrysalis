@@ -1,6 +1,5 @@
-# The build pins this to a digest so both arch builds land on the same base and the image
-# records which one it used. The tag default keeps a plain `docker build` working.
-# ../../APPENDIX.md#pinned-base
+# CI passes a digest here, so both arch builds share one base. The tag default keeps a plain
+# `docker build` working. ../../APPENDIX.md#pinned-base
 ARG base_ref=ghcr.io/lahaluhem/android-sdk:latest
 FROM ${base_ref}
 

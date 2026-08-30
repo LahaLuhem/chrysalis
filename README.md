@@ -325,9 +325,9 @@ current.
 Anything under a major automerges once CI is green, so `flutter:stable` keeps up on its own.
 Majors wait for a human ([APPENDIX.md](APPENDIX.md#renovate-automerge)).
 
-Careful with `flutter:3.47.1`. It names a Flutter version, not a fixed image, and it gets
-re-pointed every time the image is rebuilt on that same version. Pin `sha-<commit>` or a digest
-when you want bytes that don't move under you ([APPENDIX.md](APPENDIX.md#sha-tags)).
+Careful with `flutter:3.47.1`. It names a Flutter version, not a fixed image, and gets re-pointed
+whenever the image is rebuilt on that version. Pin `sha-<commit>` or a digest for bytes that stay
+put ([APPENDIX.md](APPENDIX.md#sha-tags)).
 
 > **An `<x.y>` tag stops moving once the next minor is out.** `3.44` sits at `3.44.9` now that
 > 3.47 has shipped, so bump the tag when you're ready to move.
