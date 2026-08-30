@@ -34,11 +34,11 @@ run anywhere: any CI, any container runtime.
 
 | Image | Tags |
 | --- | --- |
-| [`ghcr.io/lahaluhem/flutter`](https://github.com/LahaLuhem/chrysalis/pkgs/container/flutter) | `stable`, the minor line (`3.47`), and the exact version (`3.47.1`) |
-| [`ghcr.io/lahaluhem/android-sdk`](https://github.com/LahaLuhem/chrysalis/pkgs/container/android-sdk) | `latest` |
+| [`ghcr.io/lahaluhem/flutter`](https://github.com/LahaLuhem/chrysalis/pkgs/container/flutter) | `stable`, the minor line (`3.47`), the exact version (`3.47.1`), and `sha-<commit>` |
+| [`ghcr.io/lahaluhem/android-sdk`](https://github.com/LahaLuhem/chrysalis/pkgs/container/android-sdk) | `latest` and `sha-<commit>` |
 
 Every tag is a multi-arch manifest, so `docker pull` grabs the variant matching
-your machine on its own.
+your machine on its own. `sha-<commit>` is the one tag that never moves.
 
 ## Quick start
 
@@ -323,8 +323,11 @@ the new version. The same config keeps the GitHub Actions pins and the `ubuntu` 
 current.
 
 Anything under a major automerges once CI is green, so `flutter:stable` keeps up on its own.
-Majors wait for a human. Pin a digest or an exact `flutter:<x.y.z>` tag if you want a version that
-never moves under you ([APPENDIX.md](APPENDIX.md#renovate-automerge)).
+Majors wait for a human ([APPENDIX.md](APPENDIX.md#renovate-automerge)).
+
+Careful with `flutter:3.47.1`. It names a Flutter version, not a fixed image, and it gets
+re-pointed every time the image is rebuilt on that same version. Pin `sha-<commit>` or a digest
+when you want bytes that don't move under you ([APPENDIX.md](APPENDIX.md#sha-tags)).
 
 > **An `<x.y>` tag stops moving once the next minor is out.** `3.44` sits at `3.44.9` now that
 > 3.47 has shipped, so bump the tag when you're ready to move.

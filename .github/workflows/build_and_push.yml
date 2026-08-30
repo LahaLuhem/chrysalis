@@ -30,6 +30,7 @@ jobs:
       flutter_minor: ${{ steps.vars.outputs.flutter_minor }}
       docker_tag: ${{ steps.vars.outputs.docker_tag }}
       push: ${{ steps.vars.outputs.push }}
+      sha: ${{ steps.vars.outputs.sha }}
       build_android_sdk: ${{ steps.gate.outputs.build_android_sdk }}
       build_flutter: ${{ steps.gate.outputs.build_flutter }}
     steps:
@@ -45,6 +46,8 @@ jobs:
             # 3.47.1 -> 3.47, so people can pin a minor line and still get its patches.
             echo "flutter_minor=${FLUTTER_VERSION%.*}"
             echo "docker_tag=$DOCKER_TAG"
+            # The one tag that never moves. APPENDIX.md#sha-tags
+            echo "sha=sha-${GITHUB_SHA:0:7}"
           } >> "$GITHUB_OUTPUT"
           if [ "${{ github.ref }}" = "refs/heads/master" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "push=true" >> "$GITHUB_OUTPUT"
@@ -125,7 +128,11 @@ jobs:
     with:
       name: android-sdk
       context: images/android-sdk
-      tags: latest
+      # sha first: it becomes the image's version label, and the merge job only checks the first
+      # tag. Without it that label just read "latest". APPENDIX.md#sha-tags
+      tags: |
+        ${{ needs.prepare.outputs.sha }}
+        latest
       title: Android SDK
       description: Android SDK (cmdline-tools, platform-tools, build-tools, a platform) on Ubuntu
       push: ${{ needs.prepare.outputs.push == 'true' }}
@@ -150,11 +157,13 @@ jobs:
       name: flutter
       context: images/flutter
       # Exact version first: it's what lands in the image's version label, and the merge job only
-      # checks the first tag. APPENDIX.md#floating-minor-tag
+      # checks the first tag (APPENDIX.md#floating-minor-tag). sha last, it's the immutable one
+      # (APPENDIX.md#sha-tags).
       tags: |
         ${{ needs.prepare.outputs.flutter_version }}
         ${{ needs.prepare.outputs.flutter_minor }}
         ${{ needs.prepare.outputs.docker_tag }}
+        ${{ needs.prepare.outputs.sha }}
       title: Flutter
       description: Flutter on the chrysalis android-sdk base image
       build-args: |
