@@ -1,4 +1,8 @@
-FROM ghcr.io/lahaluhem/android-sdk:latest
+# The build pins this to a digest so both arch builds land on the same base and the image
+# records which one it used. The tag default keeps a plain `docker build` working.
+# ../../APPENDIX.md#pinned-base
+ARG base_ref=ghcr.io/lahaluhem/android-sdk:latest
+FROM ${base_ref}
 
 # OCI labels + annotations are workflow-owned (docker/metadata-action in build-image.yml),
 # not baked here. See APPENDIX.md#oci-native-images.

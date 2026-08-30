@@ -137,10 +137,11 @@ jobs:
       description: Android SDK (cmdline-tools, platform-tools, build-tools, a platform) on Ubuntu
       push: ${{ needs.prepare.outputs.push == 'true' }}
 
-  # Built FROM the android-sdk manifest list, so publish runs only (it needs a pushed base).
-  # Runs when android-sdk is skipped too, the base is already up there. !cancelled() is what
-  # stops a skipped need from skipping this job with it. A failed one still does.
-  flutter:
+  # Which android-sdk does flutter sit on? Whatever :latest points at once android-sdk has
+  # settled, read once here so both arch builds get the same one. Also carries flutter's gate:
+  # !cancelled() is what stops a skipped android-sdk from skipping this too, while a failed one
+  # still does. APPENDIX.md#pinned-base
+  base:
     needs: [prepare, android-sdk]
     if: >-
       !cancelled()
@@ -148,6 +149,38 @@ jobs:
       && needs.prepare.outputs.build_flutter == 'true'
       && needs.android-sdk.result != 'failure'
       && needs.android-sdk.result != 'cancelled'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      ref: ${{ steps.resolve.outputs.ref }}
+    steps:
+      - name: Login to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve android-sdk:latest to a digest
+        id: resolve
+        env:
+          IMAGE: ghcr.io/lahaluhem/android-sdk
+        run: |
+          digest="$(docker buildx imagetools inspect --format '{{.Manifest.Digest}}' "$IMAGE:latest")"
+          # Shout early if the --format contract ever changes, rather than handing the flutter
+          # build a nonsense ref.
+          case "$digest" in
+            sha256:*) ;;
+            *) echo "expected a sha256 digest, got: $digest" >&2; exit 1 ;;
+          esac
+          echo "base: $IMAGE@$digest"
+          echo "ref=$IMAGE@$digest" >> "$GITHUB_OUTPUT"
+
+  # Publish runs only. No `if` needed: a skipped or failed base skips this with it.
+  flutter:
+    needs: [prepare, base]
     permissions:
       contents: read
       packages: write
@@ -168,12 +201,13 @@ jobs:
       description: Flutter on the chrysalis android-sdk base image
       build-args: |
         flutter_version=${{ needs.prepare.outputs.flutter_version }}
+        base_ref=${{ needs.base.outputs.ref }}
       push: ${{ needs.prepare.outputs.push == 'true' }}
 
   # The only requirable check here: the android-sdk and flutter calls change check name depending on
   # whether the gate skipped them, so a ruleset can't name either. This one is stable.
   images-ok:
-    needs: [prepare, android-sdk, flutter]
+    needs: [prepare, android-sdk, base, flutter]
     if: always()
     runs-on: ubuntu-latest
     permissions: {}
@@ -181,7 +215,7 @@ jobs:
       - name: Fail if any upstream job failed or was cancelled
         if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
         env:
-          RESULTS: prepare=${{ needs.prepare.result }} android-sdk=${{ needs.android-sdk.result }} flutter=${{ needs.flutter.result }}
+          RESULTS: prepare=${{ needs.prepare.result }} android-sdk=${{ needs.android-sdk.result }} base=${{ needs.base.result }} flutter=${{ needs.flutter.result }}
         run: |
           echo "$RESULTS"
           exit 1

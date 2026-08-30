@@ -172,9 +172,8 @@ apk_ndk_volume='chrysalis-test-ndk'
 
 # build_host_images: build android-sdk + flutter for the host arch into the tags above.
 build_host_images() {
-  local ver base log
+  local ver log
   ver="$(flutter_version)"
-  base='ghcr.io/lahaluhem/android-sdk:latest'
   log="$(mktemp)"
 
   section 'build android-sdk (host arch)'
@@ -186,7 +185,7 @@ build_host_images() {
 
   section 'build flutter (host arch)'
   if docker buildx build --load \
-       --build-context "$base=docker-image://$img_android" \
+       --build-arg "base_ref=$img_android" \
        --build-arg "flutter_version=$ver" \
        -t "$img_flutter" images/flutter >"$log" 2>&1; then
     ok 'built flutter'
