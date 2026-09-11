@@ -179,22 +179,45 @@ verified. A present manifest is not a verified build.
 ---
 
 <a id="no-android-cli"></a>
-## The `android` CLI can't be used here: it's x86-64 only
+## cmdline-tools stays at rev 22: rev 23 installs through an x86-64-only launcher
 
-- **Decision:** keep installing SDK packages with `sdkmanager`, deprecated as it is. Don't move to
-  `android sdk install`.
-- **Why:** `android` is a native ELF binary and Google ships **only an x86-64 build** of it. It's
-  the sole ELF in cmdline-tools, everything else there (`sdkmanager`, `avdmanager`) is a shell
-  script into Java and so runs anywhere. On the native arm64 build leg the binary can't execute at
-  all: `Exec format error`, exit 126. Using it would mean the arm64 image could only be built under
-  emulation, which breaks hard rule 4.
-- **This is not a "try again later" item** unless Google ships `android` for linux/arm64. Check the
-  ELF header before re-proposing: `od -An -tx1 -j18 -N2 .../cmdline-tools/latest/bin/android`,
-  where `3e00` is x86-64 and `b700` is aarch64.
-- **cmdline-tools is still held at rev 22.** Separate reason, still valid: on rev 23
-  `sdkmanager --licenses` became a no-op that writes nothing, so `flutter doctor` reports "Android
-  license status unknown". Rev 22 is the last rev where it works. Upstream: flutter/flutter#191487
-  and #191558. `scripts/check-android-sdk.sh` reports the pin as behind on purpose until then.
+- **Decision:** hold `ANDROID_SDK_TOOLS_VERSION` at rev 22 (`15859902`) and keep installing SDK
+  packages with `sdkmanager`, deprecated as it is. Don't move to `android sdk install`.
+- **What rev 23 actually changed.** One file that matters: `bin/sdkmanager` stopped being a JVM
+  launcher and became a shim that hands every install to `bin/android`. That binary is
+  byte-identical in rev 22 and rev 23 (same SHA-256), so this isn't an arch regression, rev 23 just
+  started calling something that had been sitting there unused. It also drops
+  `lib/sdkmanager-classpath.jar` and `lib/sdklib/libsdkmanager_lib.jar`.
+- **Why that blocks us:** the image installs packages by running `sdkmanager` during `docker build`,
+  and the arm64 leg builds natively with no x86-64 emulation (hard rule 4). On rev 23 those `RUN`
+  lines die with `Exec format error`, exit 126.
+- **`android` is not the CLI, it's a downloader.** A ~5 MB launcher that fetches the real 87 MB CLI
+  on first use from `dl.google.com/android/cli/latest/<platform>/android-cli` and caches it in
+  `$HOME/.android/bin`. Google serves `linux_x86_64` and `darwin_arm64`, so the URL we'd need 404s.
+- **The missing arm64 build is only the first of four problems** with that route:
+
+  | What | Why it hurts here |
+  | --- | --- |
+  | no Linux arm64 build | the native arm64 build leg can't run it at all |
+  | 87 MB on first use | lands in `$HOME/.android/bin`, outside every `CH_BUILD_CACHE_*` path |
+  | writes one license file | `android-sdk-license` only, where `sdkmanager --licenses` writes seven |
+  | metrics on by default | a per-call `--no-metrics` is the only off switch, so nothing to bake ([#quiet-ci-defaults](#quiet-ci-defaults)) |
+
+- **Rev 23 can still install, just not through its wrapper.** `SdkManagerCli` still ships in
+  `sdklib/tools.sdklib.jar`. Checked on native arm64 with `bin/android` deleted so nothing could
+  quietly fall back to emulation: it wrote all seven license files and installed `platform-tools`
+  plus `platforms;android-36`. Treat that as an escape hatch if the hold ever has to lift early, not
+  a plan. The entry point prints a deprecation notice and Google is already deleting the jars around
+  it.
+- **flutter doctor is no longer a reason to hold.** The shim makes `sdkmanager --licenses` a no-op,
+  which used to leave `flutter doctor` reporting "Android license status unknown"
+  (flutter/flutter#191487, #191558). Fixed in Flutter 3.47.3, which falls back to reading
+  `$ANDROID_HOME/licenses`. It says "all accepted" when *any* file there is non-empty, so a green
+  doctor tells you nothing about the set being complete. That is what the
+  `android-sdk-preview-license` assertion in `structure-test.yaml` is for.
+- **The hold has a way out and gets re-checked weekly.** `scripts/check-android-sdk.sh` holds the
+  pin instead of flagging it, and files an issue when either exit opens: a rev newer than the one
+  the hold was assessed against, or that `linux_aarch64` URL starting to serve.
 - **A local arm64 test cannot prove this.** An Apple Silicon host with OrbStack has x86-64 binfmt
   registered, so an x86-64 binary runs fine inside an arm64 container and a local check passes.
   That is exactly how this reached CI. See CLAUDE.md, *Validating arm64*.
@@ -524,8 +547,8 @@ verified. A present manifest is not a verified build.
 
 - **Decision:** bake the `build-tools` revision **AGP asks for**; do **not** bake the NDK or CMake,
   even though a bare `flutter build apk --debug` fetches both mid-build. So
-  `scripts/check-android-sdk.sh` checks the platform and cmdline-tools against Google's manifest,
-  and leaves build-tools alone.
+  `scripts/check-android-sdk.sh` tracks the platform, holds cmdline-tools, and leaves build-tools
+  alone.
 - **Why `build-tools` follows AGP, not the manifest.** AGP picks a revision and downloads it when
   absent, so a pin *ahead* of AGP's request is worse than useless: the baked copy goes unused and
   the build fetches AGP's choice anyway. Measured on Flutter 3.44.8 (AGP 9.0.1, wants `36.0.0`):

@@ -25,8 +25,8 @@ fileExistenceTests:
     path: /opt/android-sdk-linux/platforms/android-36/android.jar
     shouldExist: true
   - name: SDK licences accepted (full set)
-    # `android sdk install` writes only android-sdk-license, and flutter doctor needs the rest.
-    # Checking a second one catches that (APPENDIX.md#android-cli).
+    # `android sdk install` writes only android-sdk-license, and flutter doctor can't catch that
+    # (it passes on any non-empty file). Checking a second one does. APPENDIX.md#no-android-cli
     path: /opt/android-sdk-linux/licenses/android-sdk-preview-license
     shouldExist: true
   - name: emulator not installed

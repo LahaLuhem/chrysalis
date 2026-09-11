@@ -22,8 +22,9 @@ ENV ANDROID_SDK_ROOT=$ANDROID_HOME \
     PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools
 
 # comes from https://developer.android.com/studio/#command-line-tools-only
-# Opaque build number, this one is rev 22. Held there: rev 23 drops license acceptance and
-# breaks flutter doctor (APPENDIX.md#no-android-cli). check-android-sdk.sh keeps flagging it.
+# Opaque build number, this one is rev 22. Held there: rev 23 routes every install through an
+# x86-64-only launcher the native arm64 build can't run (APPENDIX.md#no-android-cli).
+# check-android-sdk.sh owns the hold and re-checks its way out.
 ENV ANDROID_SDK_TOOLS_VERSION=15859902
 
 # --- Build toolchain: system packages --------------------------------------
