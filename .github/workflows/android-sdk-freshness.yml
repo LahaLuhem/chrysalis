@@ -1,11 +1,8 @@
 name: Android SDK freshness
 
-# Weekly check that the platform and cmdline-tools pins in images/android-sdk/Dockerfile still
-# match Google's manifest. Renovate can't track them (its customDatasource can't parse the
-# manifest XML), so this stands in for a Renovate "update available" PR: on drift it opens or
-# updates one tracking issue, and closes it once the pins catch up. The bump stays manual.
-# build-tools is out of scope by design (AGENTS.md rule 11).
-# scripts/check-android-sdk.sh holds the logic and runs locally too.
+# Weekly: opens one tracking issue when Google's manifest moves ahead of the Android SDK pins in
+# images/android-sdk/Dockerfile, updates it as they move, and closes it once they catch up.
+# Bumps stay manual. Which pins, and why Renovate can't track them: scripts/check-android-sdk.sh.
 
 on:
   schedule:
@@ -37,17 +34,18 @@ jobs:
           label='android-sdk-update'
           title='Android SDK pins are behind upstream'
 
-          # Idempotent: ensure the tracking label exists before we list/create against it.
+          # The label has to exist before we can list or create against it, and --force means
+          # re-running this is fine.
           gh label create "$label" --force \
             --color FBCA04 \
-            --description "Android SDK platform pin is behind Google's manifest"
+            --description "An Android SDK pin is behind Google's manifest"
 
           existing="$(gh issue list --label "$label" --state open --json number --jq '.[0].number // empty')"
 
           if [ "$BEHIND" = "true" ]; then
-            intro='The Android SDK platform pin is behind the latest stable platform in the upstream manifest:'
-            footer="Bump \`ANDROID_PLATFORM_VERSION\` in \`images/android-sdk/Dockerfile\`. Leave \`ANDROID_BUILD_TOOLS_VERSION\` alone: it follows AGP's request, not the manifest (AGENTS.md rule 11). Filed and maintained by the weekly \`android-sdk-freshness\` workflow, which closes this once the pin is current."
-            body="$(printf '%s\n\n%s\n%s\n' "$intro" "$DETAILS" "$footer")"
+            intro="Android SDK pins behind Google's manifest:"
+            footer="Bump them in \`images/android-sdk/Dockerfile\`. Leave \`ANDROID_BUILD_TOOLS_VERSION\` alone, it follows what AGP asks for rather than the manifest (AGENTS.md rule 11). Filed and kept current by the weekly \`android-sdk-freshness\` workflow, which closes it once the pins catch up."
+            body="$(printf '%s\n\n%s\n\n%s\n' "$intro" "$DETAILS" "$footer")"
             if [ -n "$existing" ]; then
               gh issue edit "$existing" --body "$body"
               echo "updated issue #$existing"
@@ -55,8 +53,8 @@ jobs:
               gh issue create --label "$label" --title "$title" --body "$body"
             fi
           elif [ -n "$existing" ]; then
-            gh issue close "$existing" --comment 'The Android SDK platform pin is current. Closing automatically.'
+            gh issue close "$existing" --comment 'These pins are current again. Closing automatically.'
             echo "closed issue #$existing"
           else
-            echo 'Android SDK platform pin is current; nothing to do.'
+            echo 'Android SDK pins are current, nothing to do.'
           fi
