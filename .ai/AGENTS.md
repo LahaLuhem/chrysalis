@@ -120,9 +120,12 @@ chrysalis/
     saying "go ahead") greenlights the **first** sub-task only, not the whole plan run
     end-to-end. Keep pausing between every step until the user explicitly says to stop. Never
     one-shot a multi-step change.
-11. **`platform` and `cmdline-tools` track Google's manifest, `build-tools` doesn't.** It follows what AGP asks for
-    (a pin ahead of AGP's request goes unused while every consumer build fetches AGP's choice
-    anyway); the NDK and CMake are deliberately not baked at all, despite being fetched on every
+11. **Every Android SDK pin has its own policy.** `platform` tracks Google's manifest.
+    `cmdline-tools` is held behind it on purpose, and `scripts/check-android-sdk.sh` carries both
+    the hold and the conditions that end it
+    ([`APPENDIX.md#no-android-cli`](../APPENDIX.md#no-android-cli)). `build-tools` follows what AGP
+    asks for, since a pin ahead of AGP's request goes unused while every consumer build fetches
+    AGP's choice anyway. The NDK and CMake aren't baked at all, despite being fetched on every
     build. Prove a `build-tools` bump with `scripts/test.sh apk`, which fails on any unexpected
     mid-build install. Measured numbers, and why re-proposing the NDK bake needs new evidence:
     [`APPENDIX.md#ndk-cmake-not-baked`](../APPENDIX.md#ndk-cmake-not-baked).
