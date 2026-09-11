@@ -53,7 +53,7 @@ jobs:
               gh issue create --label "$label" --title "$title" --body "$body"
             fi
           elif [ -n "$existing" ]; then
-            gh issue close "$existing" --comment 'These pins are current again. Closing automatically.'
+            gh issue close "$existing" --comment 'Nothing left to act on here. Closing automatically.'
             echo "closed issue #$existing"
           else
             echo 'Android SDK pins are current, nothing to do.'
