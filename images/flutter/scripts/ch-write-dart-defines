@@ -10,7 +10,7 @@
 # Inert and vendor-agnostic (reads only env vars, assumes no CI system) and self-contained, so
 # besides running from the chrysalis image you can curl it from GitHub and run it on any runner
 # (e.g. a macOS iOS-build runner that wants the dart-defines without the Android setup). The output
-# is .env KEY=value format regardless of the file name; flutter picks JSON vs .env by content (a
+# is .env KEY=value format regardless of the file name. Flutter picks JSON vs .env by content (a
 # leading '{'), not the extension, so a .env-format file named .json is still read correctly.
 #
 # requires: bash
@@ -30,7 +30,7 @@ Each CH_BUILD_DEFINE_<KEY>=<value> becomes a verbatim <KEY>=<value> line. With n
 set it does nothing. Run from your project root (the default path is project-relative).
 
   --out FILE       write here instead of $CH_BUILD_DART_DEFINE_FILE (default lib/env/dart_defines.env)
-  -n, --dry-run    show what would be written; write nothing
+  -n, --dry-run    show what would be written, without writing it
   -h, --help       this help
 
 Then build with:  flutter build apk --dart-define-from-file="$CH_BUILD_DART_DEFINE_FILE"

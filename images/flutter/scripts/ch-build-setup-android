@@ -20,7 +20,7 @@
 # Run it from your Flutter project root. Why these choices (verbatim per-key defines, the
 # read-site typing finding, generate-if-absent, the cache var): ../../APPENDIX.md#build-setup-android.
 #
-# requires: bash; keytool (JDK) for signing, curl/jq/openssl for the google-services fetch
+# requires: bash, keytool (JDK) for signing, curl/jq/openssl for the google-services fetch
 #
 # Usage: ch-build-setup-android [--dry-run] [--help]
 #
@@ -31,7 +31,7 @@ die() { printf 'ch-build-setup-android: error: %s\n' "$1" >&2; exit 1; }
 
 # Single source of truth for the defaulted scalar vars: this block feeds both default
 # resolution and --help, so the two cannot drift. One per line, NAME|DEFAULT|DESCRIPTION
-# ('|' appears in neither field; the DNAME default carries commas but no pipe). CH_BUILD_CACHE_KEYSTORE
+# ('|' appears in neither field, and the DNAME default carries commas but no pipe). CH_BUILD_CACHE_KEYSTORE
 # is also baked as an image ENV (the default here is the fallback outside the image): the keystore
 # path to add to your build cache for a stable signing key. (The dart-define file path,
 # CH_BUILD_DART_DEFINE_FILE, lives in ch-write-dart-defines now.)
@@ -75,7 +75,7 @@ Reads CH_BUILD_* environment variables. The dart-define and google-services lane
 (nothing happens unless their vars are set); signing is always set up unless android/key.properties
 already exists. Run from the Flutter project root.
 
-  -n, --dry-run   Show what would be written; write nothing.
+  -n, --dry-run   Show what would be written, without writing it.
   -h, --help      This help.
 
 dart-defines (via ch-write-dart-defines; one variable per key, value written verbatim):
@@ -101,9 +101,9 @@ EOF
 
 Notes:
   - Android signing is set up only when android/key.properties is absent.
-  - The keystore is created only when missing; cache CH_BUILD_CACHE_KEYSTORE to keep the
+  - The keystore is created only when missing, so cache CH_BUILD_CACHE_KEYSTORE to keep the
     signing key stable across runs (changing the password invalidates a cached keystore).
-  - google-services.json is fetched only when absent; run
+  - google-services.json is fetched only when absent. Run
     ch-fetch-firebase-config --android --force to refresh it.
   - CH_BUILD_DART_DEFINE_FILE and CH_BUILD_CACHE_KEYSTORE are baked into the image.
 EOF
@@ -114,7 +114,7 @@ EOF
 # CH_BUILD_DEFINE_* and CH_BUILD_DART_DEFINE_FILE itself, so only --dry-run is threaded through.
 setup_dart_defines() {
   local dry_run="$1"
-  # Prefer the copy shipped beside this script; fall back to PATH (both are on PATH in the image).
+  # Prefer the copy shipped beside this script, falling back to PATH (both are on PATH here).
   local writer
   writer="$(dirname "${BASH_SOURCE[0]}")/ch-write-dart-defines"
   if [ ! -x "$writer" ]; then
@@ -126,22 +126,22 @@ setup_dart_defines() {
 }
 
 # Fetch android/app/google-services.json from Firebase by delegating to ch-fetch-firebase-config
-# --android (the shared fetcher; see APPENDIX.md#build-setup-android). With none of the Firebase
-# vars set this does nothing; with them set the fetcher validates them (failing fast on a partial
+# --android (the shared fetcher, see APPENDIX.md#build-setup-android). With none of the Firebase
+# vars set this does nothing. With them set the fetcher validates them (failing fast on a partial
 # set) but leaves an existing google-services.json untouched, the way the signing lane keeps an
 # existing keystore. To refresh, run ch-fetch-firebase-config --android --force directly. The
 # credential (CH_BUILD_FIREBASE_CLIENT_EMAIL / _PRIVATE_KEY) is project-scoped and shared with the
-# eventual iOS setup; only CH_BUILD_ANDROID_FIREBASE_APP_ID is Android-specific.
+# eventual iOS setup, and only CH_BUILD_ANDROID_FIREBASE_APP_ID is Android-specific.
 setup_google_services() {
   local dry_run="$1"
   if [ -z "${CH_BUILD_ANDROID_FIREBASE_APP_ID:-}" ] \
     && [ -z "${CH_BUILD_FIREBASE_CLIENT_EMAIL:-}" ] \
     && [ -z "${CH_BUILD_FIREBASE_PRIVATE_KEY:-}" ]; then
-    log "no Firebase vars set; skipping google-services.json"
+    log "no Firebase vars set, skipping google-services.json"
     return 0
   fi
 
-  # Prefer the copy shipped beside this script; fall back to PATH (both are on PATH in the image).
+  # Prefer the copy shipped beside this script, falling back to PATH (both are on PATH here).
   local fetcher
   fetcher="$(dirname "${BASH_SOURCE[0]}")/ch-fetch-firebase-config"
   if [ ! -x "$fetcher" ]; then
@@ -161,7 +161,7 @@ setup_google_services() {
 setup_signing() {
   local dry_run="$1"
   if [ -f android/key.properties ]; then
-    log "android/key.properties present; leaving signing untouched"
+    log "android/key.properties present, leaving signing untouched"
     return 0
   fi
 

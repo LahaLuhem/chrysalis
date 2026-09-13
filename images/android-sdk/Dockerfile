@@ -1,6 +1,6 @@
 # Android SDK image: Ubuntu + cmdline-tools, platform-tools, build-tools, a platform.
 # This is the base layer the flutter image builds FROM. The SDK build tools are
-# x86-64-only on Linux; see ../../APPENDIX.md#arm64-android-build-limitation.
+# x86-64-only on Linux. See ../../APPENDIX.md#arm64-android-build-limitation.
 #
 # Layers (see "What's in the image" in the README):
 #   Base             ubuntu
@@ -30,7 +30,7 @@ ENV ANDROID_SDK_TOOLS_VERSION=15859902
 # --- Build toolchain: system packages --------------------------------------
 # JDK + the deps to fetch and build with the Android SDK. jq and lcov are the
 # Convenience (DX) tools (see "What's in the image" in the README).
-# Headless JDK: Android/Gradle builds need no GUI libs (AWT runs headless); the full
+# Headless JDK: Android/Gradle builds need no GUI libs (AWT runs headless), and the full
 # JDK's recommends add ~500 MB. No build-essential: the NDK bundles its own toolchain,
 # so nothing here invokes host gcc/make.
 RUN apt-get update \
@@ -42,7 +42,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # JAVA_HOME for the JDK installed above. TARGETARCH (amd64/arm64) is set by Buildx and
-# matches Ubuntu's /usr/lib/jvm/java-21-openjdk-<arch> layout; the "21" mirrors the
+# matches Ubuntu's /usr/lib/jvm/java-21-openjdk-<arch> layout, and the "21" mirrors the
 # openjdk-21-jdk-headless pin above. Tools that read JAVA_HOME (Gradle, flutter doctor)
 # then resolve the JDK deterministically instead of guessing via PATH.
 ARG TARGETARCH
@@ -51,12 +51,12 @@ ENV JAVA_HOME=/usr/lib/jvm/java-21-openjdk-${TARGETARCH}
 # --- Build toolchain: x86-64 runtime libs for emulated Android tools (arm64) -
 # Google ships the Android Linux build tools (aapt2, zipalign, ...) as x86-64 ELF
 # only, so on arm64 they run solely under host x86-64 emulation (Apple Silicon
-# Docker/OrbStack: transparent; other arm64 Linux must register QEMU once with
+# Docker/OrbStack does this transparently, while other arm64 Linux registers QEMU once with
 # `docker run --privileged --rm tonistiigi/binfmt --install amd64`). This set is
 # the empirical minimum the emulated tools load: libc6 + libgcc-s1 cover aapt2,
-# zipalign, cmake and ninja; zlib1g (libz.so.1) is what the NDK clang needs for
+# zipalign, cmake and ninja. zlib1g (libz.so.1) is what the NDK clang needs for
 # the default app's CMake step. libc++ is bundled in build-tools/lib64, and
-# nothing links libstdc++.so.6. Emulated, NOT native Android; amd64 is
+# nothing links libstdc++.so.6. Emulated, NOT native Android. amd64 is
 # unaffected. See ../../APPENDIX.md#arm64-android-build-limitation.
 RUN if [ "$(uname -m)" = "aarch64" ]; then \
       set -eux; \

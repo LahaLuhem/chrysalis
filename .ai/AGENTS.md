@@ -1,9 +1,9 @@
 # AGENTS.md for `chrysalis`
 
 Tool-agnostic brief for any coding agent (Claude Code, Copilot, Cursor, Codex, …) working
-in this repo. Claude-Code-specific guidance lives in [CLAUDE.md](./CLAUDE.md). Design
-rationale and rejected paths live in [`../APPENDIX.md`](../APPENDIX.md) (anchor-keyed).
-Read this first.
+in this repo. Claude-Code-specific guidance lives in [CLAUDE.md](./CLAUDE.md), code style in
+[`../CODESTYLE.md`](../CODESTYLE.md), and design rationale in
+[`../APPENDIX.md`](../APPENDIX.md) (anchor-keyed). Read this first.
 
 ## Project goal
 
@@ -57,25 +57,19 @@ Why it exists: [`APPENDIX.md#why-multi-arch`](../APPENDIX.md#why-multi-arch).
 
 ```
 chrysalis/
-├── versions.env                     DOCKER_TAG=stable, FLUTTER_VERSION=<x.y.z> (pinned inputs)
+├── versions.env        the pinned inputs: DOCKER_TAG, FLUTTER_VERSION
 ├── images/
-│   ├── android-sdk/                 ubuntu:26.04 + Android cmdline/platform/build tools
-│   │   ├── Dockerfile               (arm64-aware: bakes the x86-64 libs the SDK tools need)
-│   │   ├── structure-test.yaml      container-structure-test assertions
-│   │   └── .dockerignore
-│   └── flutter/                     FROM android-sdk; clones Flutter at FLUTTER_VERSION
-│       ├── Dockerfile
-│       ├── structure-test.yaml
-│       └── .dockerignore
-├── scripts/
-│   └── test.sh                      Local test suite (lint / image / multiarch / all)
+│   ├── android-sdk/    ubuntu + Android cmdline/platform/build tools. arm64-aware: bakes the
+│   │                   x86-64 libs those tools need
+│   └── flutter/        FROM android-sdk, clones Flutter at FLUTTER_VERSION. Its scripts/ holds
+│                       the on-PATH ch-* build-env helpers
+├── scripts/            test.sh (local suite), check-android-sdk.sh (pin freshness), OCI asserts
 ├── .github/
-│   ├── workflows/                   build_and_push.yml (build+publish), build-image.yml (reusable), test.yml (lint)
-│   └── renovate.jsonc               Renovate: version tracking (Flutter pin, Actions, ubuntu base)
-├── .hadolint.yaml                   hadolint rules (deliberate ignores)
-├── README.md                        Image names, what's inside, usage
-├── APPENDIX.md                      Design rationale (anchor-keyed)
-└── .ai/                             This file + CLAUDE.md (symlinked at root, gitignored)
+│   ├── workflows/      build_and_push.yml + the reusable build-image.yml, plus lint and upkeep
+│   └── renovate.jsonc  version tracking
+├── CODESTYLE.md        code style
+├── APPENDIX.md         design rationale (anchor-keyed)
+└── .ai/                this file + CLAUDE.md (symlinked at root, gitignored)
 ```
 
 ## Hard rules
@@ -185,15 +179,7 @@ from that same image too. Since it inspects a built image, that step mounts the 
 socket into the container. Beyond Docker itself, the only host tool the suite still needs is
 `jq`, for the opt-in `multiarch` target.
 
-## Code style (no separate CODESTYLE.md yet)
+## Code style
 
-The code surface is small, so until a `CODESTYLE.md` is warranted, follow:
-
-- **Dockerfiles:** one `RUN` per logical stage, chained with `&&`. Clean apt lists in the
-  same layer (`rm -rf /var/lib/apt/lists/*`). Keep arch guards explicit
-  (`if [ "$(uname -m)" = "x86_64" ]; then …; fi`).
-- **Workflow YAML:** 2-space indent, actions pinned to a major tag (`@v7`), and `run:` blocks kept
-  `actionlint`/shellcheck-clean, marking intentional word-splitting with
-  `# shellcheck disable=SCxxxx`.
-- **Bash:** `set -e`, quoted expansions, and only POSIX `sh` features where the shebang is
-  `#!/bin/sh`.
+Lives in [`../CODESTYLE.md`](../CODESTYLE.md): Dockerfiles, workflow YAML, Bash, and the
+single-source rule for version pins.

@@ -9,11 +9,11 @@
 #   apk        Build a debug APK from a throwaway app in the flutter image, proving the
 #              Android toolchain works end to end (arm64 runs it under x86 emulation).
 #              Caches the NDK it downloads in a named volume (APK_CACHE=0 to skip).
-#              Slow; opt-in, not part of `all`.
+#              Slow, opt-in, not part of `all`.
 #   multiarch  Build android-sdk for amd64 + arm64 (amd64 emulated) and assert the
-#              resulting manifest carries both arches. Slow; opt-in, not part of `all`.
+#              resulting manifest carries both arches. Slow, opt-in, not part of `all`.
 #   renovate   Schema-check .github/renovate.jsonc with renovate-config-validator, from the
-#              official renovate image. Big pull; opt-in, not part of `all`.
+#              official renovate image. Big pull, opt-in, not part of `all`.
 #   clean      Remove the cache volume the apk target creates (~2.9 GB per NDK version).
 #   all        lint + image.
 #
@@ -48,7 +48,7 @@ need() {
 # versions. The repo is mounted read-only at /work, so the repo-relative paths callers pass
 # resolve there. Override the image with LINTERPOL_IMAGE (e.g. a locally-built linterpol:local
 # when developing Linterpol itself). Pinned by digest in .github/lint-tools.env (single source,
-# shared with the build-image.yml structure-test step; Renovate bumps it there).
+# shared with the build-image.yml structure-test step, and Renovate bumps it there).
 LINTERPOL_IMAGE="${LINTERPOL_IMAGE:-$(grep -E '^LINTERPOL_IMAGE=' .github/lint-tools.env | cut -d= -f2-)}"
 linterpol_ready=''
 
@@ -75,7 +75,7 @@ ensure_linterpol_image() {
 }
 
 # lint_tool <tool> <args...>: run a linter from the linterpol image (the host isn't assumed
-# to have the tools; the image is the single source of versions).
+# to have the tools, since the image is the single source of versions).
 lint_tool() {
   if ! command -v docker >/dev/null 2>&1; then
     printf '%smissing tool:%s docker is required to run the linters from the linterpol image\n' "$red" "$rst"
@@ -149,7 +149,7 @@ run_lint() {
 
   section 'shellcheck (shell scripts)'
   # scripts/*.sh plus the helpers baked into the flutter image (images/flutter/scripts/*, on-PATH
-  # commands so no .sh suffix); the latter glob auto-covers any helper added to that dir.
+  # commands so no .sh suffix). The latter glob auto-covers any helper added to that dir.
   if lint_tool shellcheck scripts/*.sh images/flutter/scripts/*; then ok 'scripts clean'; else bad 'shellcheck'; fi
 
   section 'biome (JSON/JSONC)'
@@ -229,9 +229,9 @@ run_image() {
     bad "image does not report Flutter $ver"
   fi
 
-  # arm64 runs the (x86-64) Android tools only under host emulation; the image bakes the
+  # arm64 runs the (x86-64) Android tools only under host emulation, and the image bakes the
   # x86-64 libs they load (asserted in structure-test.yaml). Here, prove aapt2 actually
-  # runs. That needs host x86-64 emulation (Apple Silicon Docker/OrbStack: built-in; bare
+  # runs. That needs host x86-64 emulation (Apple Silicon Docker/OrbStack: built-in, bare
   # arm64 Linux: `docker run --privileged --rm tonistiigi/binfmt --install amd64`), so a
   # non-runnable aapt2 is a SKIP, not a failure.
   if [ "$arch" = "arm64" ] || [ "$arch" = "aarch64" ]; then
@@ -253,7 +253,7 @@ run_image() {
 
 # Builds a debug APK from a throwaway app in the flutter image, proving the Android toolchain
 # works end to end (on arm64 the SDK build tools run under x86 emulation), then asserts AGP used
-# the baked SDK rather than fetching its own. Slow; opt-in, not part of `all`.
+# the baked SDK rather than fetching its own. Slow, opt-in, not part of `all`.
 run_apk() {
   if ! command -v docker >/dev/null 2>&1; then
     printf '%smissing tool:%s docker  (start OrbStack / Docker Desktop)\n' "$red" "$rst"; exit 2
@@ -300,7 +300,7 @@ run_apk() {
   # exceptions (../APPENDIX.md#ndk-cmake-not-baked).
   section 'baked SDK covers AGP (no unexpected mid-build installs)'
   if [ -z "$built" ]; then
-    skip 'build failed; nothing to assert about mid-build installs'
+    skip 'build failed, nothing to assert about mid-build installs'
   else
     unexpected="$(grep -oE 'Installing [A-Za-z0-9 .()-]+ in /opt[^[:space:]]*' "$log" \
       | grep -vE 'Installing (NDK|CMake)' || true)"
@@ -318,7 +318,7 @@ run_apk() {
 # asserts the manifest carries linux/amd64 + linux/arm64. amd64 is emulated on an
 # arm64 host, so this is slow and kept out of `all`. flutter's amd64 build is left to
 # CI (emulating it locally is impractical). The imagetools merge the workflow uses is
-# already proven by the real CI publish; here we just prove both arches build + assemble.
+# already proven by the real CI publish. Here we just prove both arches build + assemble.
 run_multiarch() {
   if ! command -v docker >/dev/null 2>&1; then
     printf '%smissing tool:%s docker  (start OrbStack / Docker Desktop)\n' "$red" "$rst"; exit 2
@@ -345,7 +345,7 @@ run_multiarch() {
        -f "$tmpd/probe.Dockerfile" --output type=cacheonly "$tmpd" >"$log" 2>&1; then
     ok 'amd64 builds run here'
   else
-    skip 'amd64 emulation unavailable; enable it with:'
+    skip 'amd64 emulation unavailable, enable it with:'
     printf '        docker run --privileged --rm tonistiigi/binfmt --install amd64\n'
     rm -rf "$tmpd"; return
   fi

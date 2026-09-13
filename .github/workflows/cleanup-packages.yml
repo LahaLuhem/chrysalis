@@ -15,7 +15,7 @@ on:
     - cron: "30 4 * * 1"   # Mondays 04:30 UTC, matching Renovate's weekly cadence
   workflow_dispatch:
 
-# One cleanup at a time; don't cancel an in-flight run.
+# One cleanup at a time, and don't cancel an in-flight run.
 concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: false
