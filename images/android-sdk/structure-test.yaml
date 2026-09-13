@@ -15,6 +15,10 @@ fileExistenceTests:
   - name: cmdline-tools (sdkmanager)
     path: /opt/android-sdk-linux/cmdline-tools/latest/bin/sdkmanager
     shouldExist: true
+  - name: android CLI launcher not shipped
+    # Stops a rev bump quietly restoring it. APPENDIX.md#no-android-cli
+    path: /opt/android-sdk-linux/cmdline-tools/latest/bin/android
+    shouldExist: false
   - name: platform-tools (adb)
     path: /opt/android-sdk-linux/platform-tools/adb
     shouldExist: true

@@ -80,12 +80,13 @@ RUN cd /opt \
     && mkdir -p "${ANDROID_HOME}/cmdline-tools/" \
     && unzip -q android-sdk-tools.zip -d "${ANDROID_HOME}/cmdline-tools/" \
     && mv "${ANDROID_HOME}/cmdline-tools/cmdline-tools" "${ANDROID_HOME}/cmdline-tools/latest" \
+    # x86-64 only, and flutter_tools would pick it just for existing. APPENDIX.md#no-android-cli
+    && rm "${ANDROID_HOME}/cmdline-tools/latest/bin/android" \
     && chown -R root:root "$ANDROID_HOME" \
     && rm android-sdk-tools.zip
 
 # --- Build toolchain: licenses + platform-tools ----------------------------
-# sdkmanager, not the newer `android` CLI: that ships x86-64 only, so it cannot run on the
-# native arm64 build (APPENDIX.md#no-android-cli).
+# sdkmanager, because the `android` CLI is dropped above (APPENDIX.md#no-android-cli).
 RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers \
     && yes | sdkmanager --licenses \
     && mkdir -p /root/.android \
