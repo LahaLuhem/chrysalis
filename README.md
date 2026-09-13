@@ -293,8 +293,8 @@ plugin wants to strip debug symbols out of them before packaging. It only fetche
 own when it thinks it has to *compile* something native, so Flutter hands it an empty CMake project
 to make it fetch anyway. Flutter's own comment calls this "tricking" AGP.
 
-Net effect: roughly 690 MiB down and 3 GB on disk, so that one 6 MB stripping tool can run. We
-don't bake it, for reasons in [APPENDIX.md](APPENDIX.md#ndk-cmake-not-baked).
+Net effect: roughly 690 MiB down and 3 GB on disk, so that one 6 MB stripping tool can run. Why we
+neither bake it nor ship a trimmed one: [APPENDIX.md](APPENDIX.md#ndk-cache-not-pruned).
 
 </details>
 

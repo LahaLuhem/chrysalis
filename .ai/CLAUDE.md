@@ -1,7 +1,7 @@
-# CLAUDE.md — `chrysalis`
+# CLAUDE.md for `chrysalis`
 
 Claude-Code-specific guidance. Project facts, stack, repo layout, and hard rules live in
-[AGENTS.md](./AGENTS.md); design rationale lives in [`../APPENDIX.md`](../APPENDIX.md).
+[AGENTS.md](./AGENTS.md). Design rationale lives in [`../APPENDIX.md`](../APPENDIX.md).
 **Read AGENTS.md first.**
 
 ## Role & context
@@ -10,13 +10,13 @@ You're assisting with **chrysalis**: a repo whose only job is to **build and pub
 multi-arch (`amd64` + `arm64`) Flutter + Android-SDK Docker images to `ghcr.io/lahaluhem`,
 tracking the latest stable Flutter. *How or where the images are consumed is out of scope,
 beyond inert, opt-in build-env helpers shipped on `PATH` (see AGENTS.md).*
-Treat the user as technical and direct. Published images are outward-facing — a bad or
-mistagged push is visible to anyone who pulls — so publishing is a confirm-first action.
+Treat the user as technical and direct. Published images are outward-facing, and a bad or
+mistagged push is visible to anyone who pulls, so publishing is a confirm-first action.
 
 ## Communication
 
-- **Concise.** No "here's what I just did" recap; the diff speaks.
-- **Explain the *why*** when recommending; the *what* is in the diff.
+- **Concise.** No "here's what I just did" recap. The diff speaks.
+- **Explain the *why*** when recommending. The *what* is in the diff.
 - Reference files as `path:line` (`build_and_push.yml:42`), markdown links when you can.
 - Flag anything that changes *what gets published* (tags, registry, platforms) loudly and
   early.
@@ -27,12 +27,12 @@ mistagged push is visible to anyone who pulls — so publishing is a confirm-fir
   non-trivial task, present a written plan (sub-tasks + intended changes) and **wait for
   review** before editing. Then do **one sub-task at a time**: make the change, show what
   changed, and **stop for review before starting the next**. Approving the plan or saying "go
-  ahead" greenlights the **first** sub-task only; it is **not** permission to run the whole
+  ahead" greenlights the **first** sub-task only, and it is **not** permission to run the whole
   plan end-to-end. Keep pausing between every step until the user explicitly says to stop
-  pausing. Never one-shot a multi-step change. (This has been a repeated miss; treat it as a
+  pausing. Never one-shot a multi-step change. (This has been a repeated miss, so treat it as a
   hard gate. See AGENTS.md hard rule 10.)
 - **Ask before choosing between defensible alternatives.** If a reasonable maintainer could
-  disagree with a pick, stop and ask — list options with trade-offs, mark your
+  disagree with a pick, stop and ask, listing options with trade-offs and marking your
   recommendation with `★`, then wait. Obvious single-answer fixes (typo, one-correct-patch
   bug): just do them.
 - **Surface findings that change the premise.** If verification contradicts an assumption
@@ -42,13 +42,13 @@ mistagged push is visible to anyone who pulls — so publishing is a confirm-fir
   behaviour-preserving refactor as step one, then build the change on it. Repo longevity beats
   short-term speed. Full rationale: `~/.claude/rules/refactor-first.md`.
 
-## VCS — the user manages git
+## VCS: the user manages git
 
 - **Do NOT commit, push, branch, merge, rebase, tag, or otherwise mutate git** unless the
   user explicitly asks *in that message*. The user owns version control here.
 - Make changes in the working tree and let the user commit. If something is commit-worthy,
-  say so and suggest a message — don't run `git commit`.
-- Never `git add -A`; never `--force` / `reset --hard` / `branch -D` / `clean -fd`.
+  say so and suggest a message, but don't run `git commit`.
+- Never `git add -A`, and never `--force` / `reset --hard` / `branch -D` / `clean -fd`.
 - **Suggested commit messages are one line.** Conventional-commit prefix, imperative, no body and
   no trailers. Drop the `Co-Authored-By:` trailer the harness asks for, it needs a body to sit in.
   Repo history is 20-for-20 on this. Rationale that wants a paragraph goes in
@@ -59,9 +59,9 @@ mistagged push is visible to anyone who pulls — so publishing is a confirm-fir
 - **Read / Edit / Grep / Glob** over `cat` / `sed` / `grep` / `find`.
 - **Bash** for things without a dedicated tool: `docker` / `docker buildx`, `gh`, `curl`,
   and (only when the user asks) `git`.
-- **Lint workflows with `actionlint`** before treating a workflow change as done — it
+- **Lint workflows with `actionlint`** before treating a workflow change as done, since it
   catches expression + shellcheck issues that plain YAML parsing misses.
-- **Verify versions against registries** before pinning an action or dependency — never
+- **Verify versions against registries** before pinning an action or dependency, never
   from memory (`~/.claude/rules/dependency-versions.md`).
 - **Agent / Explore** for wide, open-ended searches, to keep large output out of context.
 
@@ -85,32 +85,32 @@ Report exactly what you verified and what you did NOT.
 
 - **`actionlint` clean** on any touched workflow.
 - **Dockerfile changes build** for the affected arch(es) locally where feasible.
-- **arm64-affecting changes validated natively** — or an explicit note of what wasn't.
+- **arm64-affecting changes validated natively**, or an explicit note of what wasn't.
 - **A publish is "done" only when `docker manifest inspect <ref>` shows BOTH `linux/amd64`
   and `linux/arm64`, and the index reports the OCI media type**
   (`application/vnd.oci.image.index.v1+json`). Never claim a successful multi-arch publish
   otherwise. `build-image.yml` enforces this on publish (`scripts/assert_oci_registry.sh` +
   `crane validate`).
-- Report outcomes faithfully — if CI hasn't run or you couldn't verify, say so.
+- Report outcomes faithfully. If CI hasn't run or you couldn't verify, say so.
 
 ## Auto-memory conventions for this project
 
-- **`project`** — scope/constraints the user states aloud (deadlines, decisions like the
+- **`project`**: scope/constraints the user states aloud (deadlines, decisions like the
   arm64 strategy). Convert relative dates to absolute.
-- **`feedback`** — corrections and validated non-obvious choices, with **Why** + **How to
+- **`feedback`**: corrections and validated non-obvious choices, with **Why** + **How to
   apply** (the plan-first/incremental workflow is one).
-- **`reference`** — external pointers (the upstream forks, GHCR package pages, the Flutter
+- **`reference`**: external pointers (the upstream forks, GHCR package pages, the Flutter
   releases JSON).
-- **Don't save** what the repo records (file paths, the workflow shape, `versions.env`) —
-  re-derive it. Verify a named file/flag still exists before acting on a memory.
+- **Don't save** what the repo records (file paths, the workflow shape, `versions.env`).
+  Re-derive it. Verify a named file/flag still exists before acting on a memory.
 
 ## Forbidden / confirm-first actions
 
-- **Publishing images** — anything that pushes to `ghcr.io/lahaluhem`, including triggering
-  the publish workflow on a branch via `workflow_dispatch` — is **confirm-first**
+- **Publishing images**: anything that pushes to `ghcr.io/lahaluhem`, including triggering
+  the publish workflow on a branch via `workflow_dispatch`, is **confirm-first**
   (outward-facing).
-- **Any git mutation** — see *VCS* above.
-- **Hand-editing `versions.env`'s `FLUTTER_VERSION`** — that's Renovate's job
-  (`.github/renovate.jsonc`); bump only when the user asks.
+- **Any git mutation**: see *VCS* above.
+- **Hand-editing `versions.env`'s `FLUTTER_VERSION`**: that's Renovate's job
+  (`.github/renovate.jsonc`). Bump only when the user asks.
 - **Destructive Docker on shared state** (`docker system prune`, removing the user's
-  images/volumes) — ask first.
+  images/volumes): ask first.
