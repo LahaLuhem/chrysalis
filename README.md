@@ -114,7 +114,7 @@ A `flutter build apk` / `appbundle` usually needs a few secret files staged firs
 `--dart-define-from-file` file, `android/app/google-services.json`, and a signing keystore with
 `android/key.properties`. Rather than hand-writing that in every CI job, the image ships
 **`ch-build-setup-android`**, an opt-in helper that materialises them from `CH_BUILD_*`
-environment variables. Call it once before your build; a job that never invokes it pays nothing.
+environment variables. Call it once before your build. A job that never invokes it pays nothing.
 
 ```bash
 # in your build job, before `flutter build`:
@@ -122,11 +122,11 @@ ch-build-setup-android
 flutter build apk --release --dart-define-from-file="$CH_BUILD_DART_DEFINE_FILE"
 ```
 
-`ch-build-setup-android --help` lists every variable; `--dry-run` shows what it would write
+`ch-build-setup-android --help` lists every variable, and `--dry-run` shows what it would write
 without writing anything.
 
-The helper runs three independent lanes; use any combination. Two are **opt-in** (they do nothing
-unless you set their variables); **signing is always-on** (a get-going convenience):
+The helper runs three independent lanes, so use any combination. Two are **opt-in** (they do nothing
+unless you set their variables). **Signing is always-on** (a get-going convenience):
 
 | Lane | Runs when | Produces |
 | --- | --- | --- |
@@ -134,14 +134,14 @@ unless you set their variables); **signing is always-on** (a get-going convenien
 | google-services | you set all three Firebase vars (none = skip, partial = error), unless `google-services.json` exists | `android/app/google-services.json` |
 | signing | always, unless `android/key.properties` already exists | a dev keystore + `android/key.properties` |
 
-Opt out of signing by committing your own `android/key.properties`; the helper never overwrites it.
+Opt out of signing by committing your own `android/key.properties`. The helper never overwrites it.
 
 ### What it reads
 
 | Variable | What it does |
 | --- | --- |
-| `CH_BUILD_DEFINE_<KEY>` | one per dart-define, written verbatim as `<KEY>=<value>`; set as many as you need |
-| `CH_BUILD_ANDROID_FIREBASE_APP_ID`, `CH_BUILD_FIREBASE_CLIENT_EMAIL`, `CH_BUILD_FIREBASE_PRIVATE_KEY` | fetch `google-services.json` from Firebase; see [Google Services](#google-services-firebase) |
+| `CH_BUILD_DEFINE_<KEY>` | one per dart-define, written verbatim as `<KEY>=<value>`, set as many as you need |
+| `CH_BUILD_ANDROID_FIREBASE_APP_ID`, `CH_BUILD_FIREBASE_CLIENT_EMAIL`, `CH_BUILD_FIREBASE_PRIVATE_KEY` | fetch `google-services.json` from Firebase, see [Google Services](#google-services-firebase) |
 | `CH_BUILD_ANDROID_KEYSTORE_PASSWORD` | PKCS12 keystore password (default `storepassword`) |
 | `CH_BUILD_ANDROID_KEY_ALIAS` | signing key alias (default `development`) |
 | `CH_BUILD_ANDROID_DNAME`, `_KEY_VALIDITY`, `_KEY_SIZE`, `_KEY_ALG` | `keytool` knobs, all sensibly defaulted |
@@ -178,17 +178,17 @@ Firebase at build time (one authenticated call to the Firebase Management API) a
 | `CH_BUILD_ANDROID_FIREBASE_APP_ID` | the Android app id, for `--android` (`1:<num>:android:<hash>`) |
 | `CH_BUILD_IOS_FIREBASE_APP_ID` | the iOS app id, for `--ios` (`1:<num>:ios:<hash>`) |
 
-The credential is project-scoped, so `CH_BUILD_FIREBASE_*` is shared across platforms; only the app
+The credential is project-scoped, so `CH_BUILD_FIREBASE_*` is shared across platforms, and only the app
 id is per-platform. Use the plain **App ID** from the Firebase console (`1:<num>:<platform>:<hash>`),
 not the *Encoded app ID* (`app-1-...`): the helper looks for the `:android:` / `:ios:` marker, so it
 rejects the encoded form. The credential plus the app id for the platform you fetch go together: set
-none and that step is skipped; set some but not all and it fails fast. If the config file already
-exists it's left untouched (so a committed one is kept and re-runs skip the fetch); pass `--force`
+none and that step is skipped. Set some but not all and it fails fast. If the config file already
+exists it's left untouched (so a committed one is kept and re-runs skip the fetch), and pass `--force`
 to refresh it.
 
-The helper accepts the private key in several shapes, so you can use whichever your CI variable UI
-will store. Masked / whitespace-checked variables (GitLab) want a single line with no spaces, which
-the raw PEM fails because its `-----BEGIN PRIVATE KEY-----` header contains spaces:
+The helper takes the private key in several shapes, so use whichever your CI variable UI will
+store. Some UIs mask or whitespace-check variables and want a single line with no spaces, which the
+raw PEM fails, because its `-----BEGIN PRIVATE KEY-----` header contains spaces:
 
 | Value of `CH_BUILD_FIREBASE_PRIVATE_KEY` | Single line, no spaces | Helper accepts |
 | --- | :---: | :---: |
@@ -199,15 +199,15 @@ the raw PEM fails because its `-----BEGIN PRIVATE KEY-----` header contains spac
 | base64 of the whole PEM, one line (`LS0tLS1CRUdJ...`) | ✓ | ✓ |
 | empty, or not a private key | | ✗ (errors at signing) |
 
-So for GitLab store either your `\n`-escaped body or base64 of the key; both are single-line and
-space-free, and base64 is the tidiest (and maskable):
+If yours is one of those, store the `\n`-escaped body or base64 of the key. Both are single-line
+and space-free, and base64 is the tidiest (and maskable):
 
 ```bash
 jq -r .private_key key.json | openssl base64 -A
 ```
 
 The service account needs a single permission, `firebase.clients.get` (the predefined *Firebase
-Viewer* role includes it, and nothing more is required). There's no Firebase CLI in the image; the
+Viewer* role includes it, and nothing more is required). There's no Firebase CLI in the image. The
 fetch is done by a small standalone helper, `ch-fetch-firebase-config`, that needs only
 `curl`/`jq`/`openssl`. `ch-build-setup-android` calls it with `--android`, but it runs on its own
 too (handy on a non-chrysalis runner, where you can fetch it straight from the repo):
@@ -220,20 +220,16 @@ ch-fetch-firebase-config --android --dry-run  # show what it would do, fetch not
 
 The same fetcher handles iOS: `ch-fetch-firebase-config --ios` writes
 `ios/Runner/GoogleService-Info.plist` from `CH_BUILD_IOS_FIREBASE_APP_ID` and the same shared
-credential. iOS builds need macOS, so that path is for a macOS runner; chrysalis's own images build
+credential. iOS builds need macOS, so that path is for a macOS runner, while chrysalis's own images build
 Android on Linux.
 
 <details>
 <summary>Creating the service account</summary>
 
-In the Google Cloud console for your Firebase project:
-
-1. **IAM & Admin → Service Accounts → Create service account.**
-2. Grant it a role that includes `firebase.clients.get`: the predefined **Firebase Viewer** works,
-   or a custom role with just that one permission.
-3. **Keys → Add key → Create new key → JSON**, and download it.
-4. Copy `client_email` and `private_key` from that JSON into `CH_BUILD_FIREBASE_CLIENT_EMAIL` and
-   `CH_BUILD_FIREBASE_PRIVATE_KEY`. The app id is in the Firebase console under Project settings.
+Make a service account in the Google Cloud console for your Firebase project, give it a role
+carrying `firebase.clients.get` (the stock **Firebase Viewer** does, or roll a custom role with
+just that), and download a JSON key. Copy `client_email` and `private_key` out of it into the two
+vars above. The app id is in the Firebase console under Project settings.
 
 </details>
 
@@ -243,16 +239,16 @@ The helper generates a PKCS12 dev keystore and writes the `key.properties` that 
 `android/app/build.gradle` reads (you still need the [standard signing
 config](https://docs.flutter.dev/deployment/android#sign-the-app) wired into your project). It
 only generates when the keystore is missing, so caching `CH_BUILD_CACHE_KEYSTORE` keeps the key
-stable; otherwise each run mints a fresh one and installed builds can't update in place.
+stable. Otherwise each run mints a fresh one and installed builds can't update in place.
 
 <details>
 <summary>Things to watch out for</summary>
 
 - **Run it from your project root** (it looks for `pubspec.yaml`).
 - **dart-define values are written verbatim.** Quote a value that contains a `#` or has leading or
-  trailing spaces; multi-line values aren't supported by `--dart-define-from-file`.
+  trailing spaces. Multi-line values aren't supported by `--dart-define-from-file`.
 - **An existing `android/key.properties` is left untouched**, so your own signing setup wins.
-- **Changing the password invalidates a cached keystore.** Clear the cache when you rotate it; the
+- **Changing the password invalidates a cached keystore.** Clear the cache when you rotate it, since the
   old keystore won't open with the new password.
 - **The files it writes contain secrets** (mode `0600`). On a reused/persistent runner, clean them
   up after the build.

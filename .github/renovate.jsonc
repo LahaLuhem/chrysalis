@@ -5,20 +5,20 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
 
-  // config:best-practices digest-pins Docker images and SHA-pins Actions; weekly PRs.
+  // config:best-practices digest-pins Docker images and SHA-pins Actions, weekly PRs.
   "extends": ["config:best-practices", "schedule:weekly"],
 
   // Managers in play: custom.regex (the markered pins below), github-actions (workflow
   // action SHAs), dockerfile (FROM lines in images/*/Dockerfile).
   "enabledManagers": ["custom.regex", "github-actions", "dockerfile"],
 
-  // Label every dependency PR; the dev-dependencies rule below overrides this for CI tooling.
+  // Label every dependency PR. The dev-dependencies rule below overrides this for CI tooling.
   "labels": ["dependencies"],
 
   // GitHub's native auto-merge. Merging republishes here (APPENDIX.md#publish-gating), and GitHub
   // waits only on *required* checks, so master's ruleset must require `lint` + `images-ok`.
   "platformAutomerge": true,
-  // master requires linear history; the platform default (a merge commit) would be rejected.
+  // master requires linear history, so the platform default (a merge commit) would be rejected.
   "automergeStrategy": "rebase",
 
   "packageRules": [
@@ -78,7 +78,7 @@
       "description": "Track the pinned tool images in .github/lint-tools.env: Linterpol (the linters + container-structure-test) and the renovate image that schema-checks this file. Neither ships in the published images, so depType `dev` drives the dev-dependencies label/scope (packageRules above).",
       "customType": "regex",
       "managerFilePatterns": ["/^\\.github/lint-tools\\.env$/"],
-      // datasource + depName from the `# renovate:` marker; currentValue is the tag, currentDigest the sha256.
+      // datasource + depName from the `# renovate:` marker. currentValue is the tag, currentDigest the sha256.
       "matchStrings": [
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+\\S+_IMAGE=[^:\\s]+:(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[0-9a-f]+)"
       ],

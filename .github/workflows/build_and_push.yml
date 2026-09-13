@@ -80,7 +80,7 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" = 'pull_request' ]; then
             files="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" --paginate --jq '.[].filename')" || files=''
           elif [ -n "$BEFORE" ] && [ "$BEFORE" != '0000000000000000000000000000000000000000' ]; then
-            # The compare API lists at most 300 files; a push that big is image-affecting in
+            # The compare API lists at most 300 files, and a push that big is image-affecting in
             # practice, and the empty-list fallback below builds anyway.
             files="$(gh api "repos/$GITHUB_REPOSITORY/compare/$BEFORE...$GITHUB_SHA" --jq '.files[].filename')" || files=''
           else

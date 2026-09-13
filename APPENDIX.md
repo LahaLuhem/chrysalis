@@ -15,7 +15,7 @@
 - [PRs build `flutter` on the android-sdk from the same checkout](#pr-flutter-build)
 - [Version tracking via Renovate, not a bespoke cron](#renovate-version-tracking)
 - [Renovate automerges the boring tier, gated on one stable check](#renovate-automerge)
-- [`build-tools` is baked to match AGP; the NDK and CMake are deliberately not](#ndk-cmake-not-baked)
+- [`build-tools` is baked to match AGP, but the NDK and CMake aren't](#ndk-cmake-not-baked)
 - [The NDK cache is a path we name, not a smaller NDK we ship](#ndk-cache-not-pruned)
 - [Quiet-by-default: telemetry off, version check skipped](#quiet-ci-defaults)
 - [DX CLIs are compiled to native binaries, not `pub global activate`](#dx-tools-native)
@@ -39,9 +39,9 @@ trade-offs. The README, [`.ai/AGENTS.md`](./.ai/AGENTS.md), and
   ever added.
 - **Why:** Claude Code (and most coding agents) auto-discover `CLAUDE.md` / `AGENTS.md` at
   the project root, but two more loose Markdown files at the root add visual noise. Scoping
-  the agent-guidance files under `.ai/` keeps them together; the root symlinks preserve
+  the agent-guidance files under `.ai/` keeps them together, and the root symlinks preserve
   auto-discovery.
-- **Committed vs. local:** the `.ai/` canonical files are committed; the root symlinks are
+- **Committed vs. local:** the `.ai/` canonical files are committed, the root symlinks are
   **gitignored** (`/AGENTS.md`, `/CLAUDE.md` in [`.gitignore`](./.gitignore)), so nothing in
   the build pipeline depends on them. Each contributor (or their agent) recreates the
   symlinks locally:
@@ -51,15 +51,13 @@ trade-offs. The README, [`.ai/AGENTS.md`](./.ai/AGENTS.md), and
   ln -s .ai/CLAUDE.md CLAUDE.md
   ```
 
-  A **real file** at the root beats the symlink — if a contributor prefers a committed root
-  `AGENTS.md`/`CLAUDE.md`, that works too; the `.ai/` copies stay the default.
+  A **real file** at the root beats the symlink. If a contributor prefers a committed root
+  `AGENTS.md`/`CLAUDE.md`, that works too, and the `.ai/` copies stay the default.
 - **Cross-platform note:** symlinks survive `git clone` on macOS/Linux. On Windows hosts
   without symlink support the file shows up as a small text file containing the link target;
   the fallback is real files at root, hand-synced.
-- **No `CODESTYLE.md` yet:** the code surface (Dockerfiles, workflow YAML, one shell script)
-  is small, so style is folded into [`.ai/AGENTS.md`](./.ai/AGENTS.md) rather than split into
-  a speculative `CODESTYLE.md`. When it grows, `CODESTYLE.md` goes at the root (not
-  symlinked — style serves humans and agents alike).
+- **`CODESTYLE.md` sits at the root, unsymlinked.** Style serves humans and agents alike, so it
+  needs no auto-discovery trick.
 
 ---
 
@@ -67,48 +65,44 @@ trade-offs. The README, [`.ai/AGENTS.md`](./.ai/AGENTS.md), and
 ## Why this fork exists: maintained *and* multi-arch
 
 - **`cirruslabs/docker-images-flutter` was multi-arch but is EOL.** Cirrus Labs is joining
-  OpenAI; the images froze ~2026-05-01. They shipped genuine `linux/amd64` + `linux/arm64`
+  OpenAI, and the images froze ~2026-05-01. They shipped genuine `linux/amd64` + `linux/arm64`
   manifests (verified via `docker buildx imagetools inspect`), but receive no further
   updates.
 - **The `davidmartos96` fork tracks the latest Flutter but is amd64-only.** Its workflow
   hardcodes `platforms: linux/amd64` and the QEMU setup step is commented out.
 - **`chrysalis` wants both:** the latest stable Flutter *and* native `arm64`, maintained
   under our own GHCR namespace (`ghcr.io/lahaluhem`). "Native arm64" has a sharp caveat for
-  Android builds — see [#arm64-android-build-limitation](#arm64-android-build-limitation).
+  Android builds, see [#arm64-android-build-limitation](#arm64-android-build-limitation).
 
 ---
 
 <a id="arm64-android-build-limitation"></a>
 ## arm64 Linux builds Android only under x86-64 emulation
 
-**Decision (resolved):** ship multi-arch and make the arm64 image *able* to build Android by
-baking in the x86-64 runtime libs its (x86-64) Android tools need, so builds work on any host
-that can emulate x86-64. Validated on Apple Silicon + OrbStack with a real
-`flutter build apk --debug` that produced an APK. It is **emulated, never native**; do not
-claim otherwise.
+**Decision (resolved):** ship multi-arch and make the arm64 image *able* to build Android by baking
+in the x86-64 runtime libs its (x86-64) Android tools need, so builds work on any host that can
+emulate x86-64. Validated on Apple Silicon + OrbStack with a real `flutter build apk --debug` that
+produced an APK. It is **emulated, never native**. Do not claim otherwise.
 
 ### The wall
-Google ships the Linux Android SDK tools (`aapt2`, `aapt`, `zipalign`, `dexdump`, `adb`,
-`cmake`, `ninja`, the NDK) as **x86-64 only**; there are no arm64 Linux variants, and the
-Android Gradle Plugin on arm64 still fetches the `-linux` (x86-64) maven `aapt2`. On a bare
-arm64 host `flutter build apk` reaches `:app:configureCMakeDebug[arm64-v8a]` and dies with
+Google ships the Linux Android SDK tools (`aapt2`, `aapt`, `zipalign`, `dexdump`, `adb`, `cmake`,
+`ninja`, the NDK) as **x86-64 only**, and AGP on arm64 still fetches the `-linux` maven `aapt2`. On
+a bare arm64 host `flutter build apk` reaches `:app:configureCMakeDebug[arm64-v8a]` and dies with
 `Dynamic loader not found: /lib64/ld-linux-x86-64.so.2`.
 
-### What actually makes it work: two ingredients
-That loader error is the tell. It takes **both**:
+### It takes two things, not one
+That loader error is the tell.
 
-1. **Host x86-64 emulation.** Verified: an x86-64 *static* binary runs inside an arm64
-   container on OrbStack with no setup. The emulation is the host's to provide.
-2. **x86-64 userland libs in the image.** A *dynamic* x86-64 binary still fails until the
-   image carries the x86-64 loader and libs. `readelf` on the real tools pins the exact set:
-   - `aapt2` needs `libc6` + `libgcc-s1`.
-   - NDK `clang` needs `libc6` + `libgcc-s1` + **`zlib1g`** (`libz.so.1`); even the default
-     app triggers an NDK CMake configure, so this is not optional.
-   - `cmake` statically links its C++ runtime (needs `libc6` only); `aapt`/`zipalign` use the
-     `libc++.so` bundled in `build-tools/lib64`; **nothing links `libstdc++.so.6`**.
+1. **Host x86-64 emulation.** An x86-64 *static* binary already runs inside an arm64 container on
+   OrbStack with no setup, so the emulation is the host's to provide.
+2. **x86-64 userland libs in the image.** A *dynamic* x86-64 binary still fails until the image
+   carries the loader and libs. `readelf` on the real tools pins the set. `aapt2` needs `libc6` +
+   `libgcc-s1`. NDK `clang` adds **`zlib1g`** (`libz.so.1`), and even the default app triggers an
+   NDK CMake configure, so it isn't optional. `cmake` statically links its C++ runtime,
+   `aapt`/`zipalign` use the `libc++.so` in `build-tools/lib64`, and nothing links `libstdc++.so.6`.
 
-   So the minimal baked set is **`libc6` + `libgcc-s1` + `zlib1g`** (the arm64-guarded
-   emulation-libs layer in `images/android-sdk/Dockerfile`). amd64 is untouched.
+So the baked set is **`libc6` + `libgcc-s1` + `zlib1g`**, in the arm64-guarded layer in
+`images/android-sdk/Dockerfile`. amd64 is untouched.
 
 ### Host support matrix
 | Host | x86-64 emulation | Setup |
@@ -116,39 +110,34 @@ That loader error is the tell. It takes **both**:
 | Apple Silicon + OrbStack | built-in | none |
 | Apple Silicon + Docker Desktop | yes | enable "Use Rosetta…", else QEMU |
 | arm64 Linux (Graviton, Pi, CI) | only if registered | `docker run --privileged --rm tonistiigi/binfmt --install amd64` |
-| arm64 Linux, nothing registered | none | builds still can't run the tools |
+| arm64 Linux, nothing registered | none | builds can't run the tools |
 
 ### Performance
-Most of an Android build is JVM work (Gradle, AGP, `d8`/`r8`) that runs **native arm64**.
-Only the native tools (`aapt2`, `zipalign`, and `cmake`/`ninja`/clang for NDK steps) are
-emulated, so overhead scales with how much native code you build: mild on Apple Silicon
-(Rosetta-class), heavier on QEMU hosts.
+Most of an Android build is JVM work (Gradle, AGP, `d8`/`r8`) running native arm64. Only the native
+tools are emulated, so the overhead tracks how much native code you build: mild on Apple Silicon,
+heavier on QEMU.
 
 ### Rejected paths
-- **Document-only (consumer installs the libs).** Clunky; pushes a setup chore onto every
-  user when a tiny image layer removes it.
-- **Bundle `qemu-user-static` + per-tool wrapper scripts.** Self-contained on any arm64
-  Linux, but fragile and high-maintenance (every native tool wrapped; AGP/NDK bumps add
-  more). The host-emulation requirement is the honest, low-maintenance floor instead.
-- **A separate lean vs build-capable image.** The strict lib set is three packages, so the
-  split would double the build matrix, tags, and maintenance to save almost nothing. Revisit
-  only if a heavy x86-64 NDK is ever bundled (which isn't in scope for amd64 either).
-- **An iOS/macOS `flutter-mac` image.** Out of scope, and not a Docker image at all: iOS
-  needs a **macOS VM on Apple Silicon Mac hardware** (Tart / Apple `Virtualization.framework`),
-  a separate Mac-only product. Do iOS on macOS CI runners; a Tart image, if ever wanted, is a
-  separate sibling repo. (Config *fetch* is the exception that stays in scope:
-  `ch-fetch-firebase-config --ios` pulls `GoogleService-Info.plist`, a platform-agnostic network
-  call rather than a build; see [#build-setup-android](#build-setup-android).)
+- **Document-only, consumer installs the libs.** Pushes a setup chore onto every user when a tiny
+  image layer removes it.
+- **Bundle `qemu-user-static` + per-tool wrappers.** Self-contained anywhere, but every native tool
+  needs wrapping and each AGP/NDK bump adds more. Host emulation is the low-maintenance floor.
+- **A separate lean vs build-capable image.** Three packages isn't worth doubling the build matrix,
+  tags and maintenance. Revisit only if a heavy x86-64 NDK is ever bundled.
+- **An iOS/macOS `flutter-mac` image.** Not a Docker image at all: iOS needs a macOS VM on Apple
+  hardware (Tart), a separate Mac-only product, so do iOS on macOS runners. Config *fetch* stays in
+  scope, since `ch-fetch-firebase-config --ios` is a network call rather than a build
+  ([#build-setup-android](#build-setup-android)).
 
 ### Guards
-`images/android-sdk/structure-test.yaml` asserts the x86-64 loader is present (deterministic,
-runs on both arches in CI). `scripts/test.sh` (`image` target) additionally runs `aapt2` under
-emulation on arm64, skipping rather than failing where the host has no emulation registered.
+`images/android-sdk/structure-test.yaml` asserts the x86-64 loader is present, deterministically and
+on both arches. `scripts/test.sh image` also runs `aapt2` under emulation on arm64, skipping rather
+than failing where the host has none registered.
 
 ### Prior art
-cirruslabs shipped arm64 manifests with the same x86-64-tool reality but only ever
-smoke-tested the x86_64 emulator path, so their arm64 Android build was never actually
-verified. A present manifest is not a verified build.
+cirruslabs shipped arm64 manifests with the same x86-64-tool reality but only smoke-tested the
+x86_64 path, so their arm64 Android build was never verified. A present manifest is not a verified
+build.
 
 ---
 
@@ -240,7 +229,7 @@ verified. A present manifest is not a verified build.
   ([#why-multi-arch](#why-multi-arch)) and contradicts AGENTS hard rule 5 ("native arm64 is fine
   for `flutter`/`dart`/test/analyze").
 - **What the clone does instead:** it fetches only the framework and tooling (arch-independent
-  Dart source plus shell scripts); the first `flutter` run bootstraps the **host-arch** Dart SDK
+  Dart source plus shell scripts), and the first `flutter` run bootstraps the **host-arch** Dart SDK
   via `bin/internal/update_dart_sdk.sh`. So each per-arch image gets an arch-matched native Dart
   with no extra logic:
   - Flutter SDK tarball (`releases_linux.json`): x64 only, no arm64 published.
@@ -254,10 +243,10 @@ verified. A present manifest is not a verified build.
   - The heavy bytes (Android engine artifacts) are pulled by `flutter precache --android` on first
     run under either method, so the clone's only extra cost is a small shallow `.git`.
 - **Ties into version tracking:** the pin is consumed as the clone's `--branch` tag and tracked by
-  Renovate's `flutter-version` datasource; see
+  Renovate's `flutter-version` datasource. See
   [#renovate-version-tracking](#renovate-version-tracking) for why that beats Dependabot.
 - **Rejected: download the x64 tarball and hand-swap an arm64 Dart SDK.** Unsupported, and the
-  tarball's framework expects its bundled Dart; the clone's bootstrap is the maintained path that
+  tarball's framework expects its bundled Dart, while the clone's bootstrap is the maintained path that
   resolves the correct Dart per arch.
 
 ---
@@ -279,7 +268,7 @@ verified. A present manifest is not a verified build.
   per-arch build pulls the matching base on its own. Hence the job order build-android →
   merge-android → resolve-base → build-flutter → merge-flutter ([`#pinned-base`](#pinned-base)).
 - **`provenance: false`.** Provenance/SBOM attestations add `unknown/unknown` entries to the
-  manifest list that muddy `docker manifest inspect`; disabling them keeps the manifest to
+  manifest list that muddy `docker manifest inspect`. Disabling them keeps the manifest to
   exactly the two platform images.
 
 ---
@@ -294,11 +283,11 @@ verified. A present manifest is not a verified build.
   `application/vnd.oci.image.index.v1+json` index. So `docker buildx imagetools inspect
   ghcr.io/lahaluhem/<img>:<tag> --raw` reports the OCI index type.
 - **Metadata is workflow-owned, not baked into the Dockerfiles.** `docker/metadata-action` generates
-  the OCI labels (image config) and annotations; the Dockerfiles carry no `LABEL`s. The split build
+  the OCI labels (image config) and annotations, and the Dockerfiles carry no `LABEL`s. The split build
   means metadata attaches in two places: the per-arch push applies labels + manifest-level annotations
   (`DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest`), and the merge applies index-level annotations, fed
   to `imagetools create --annotation "index:..."` (`...LEVELS: index`). `title`/`description` are
-  curated per image (from `build_and_push.yml`); `source`/`revision`/`created`/`version`/`licenses`
+  curated per image (from `build_and_push.yml`), while `source`/`revision`/`created`/`version`/`licenses`
   fill in from the repo and the build commit.
 - **Two checks keep it honest.** On publish, the merge job runs
   [`scripts/assert_oci_registry.sh`](./scripts/assert_oci_registry.sh) (the index, both arches, and
@@ -318,7 +307,7 @@ verified. A present manifest is not a verified build.
 <a id="publish-gating"></a>
 ## Publishing is gated to `master` and manual dispatch
 
-- **Publish on `master` pushes and `workflow_dispatch`; pull requests build-validate without
+- **Publish on `master` pushes and `workflow_dispatch`, while pull requests build-validate without
   pushing.** This keeps the shared tags (`android-sdk:latest`, `flutter:stable`,
   `flutter:<version>`) from being clobbered by every branch, while still validating both
   arches on PRs and giving a deliberate manual path to publish/verify a branch
@@ -431,122 +420,88 @@ verified. A present manifest is not a verified build.
 <a id="renovate-version-tracking"></a>
 ## Version tracking via Renovate, not a bespoke cron
 
-- **Decision:** one dedicated manager (Renovate, `config:best-practices`, Mend-hosted) owns
-  every version bump, replacing the hand-rolled `update_flutter_versions.sh` +
-  `check_flutter_versions.yml` cron. Config lives in
+- **Decision:** Renovate (`config:best-practices`, Mend-hosted) owns every version bump, replacing
+  a hand-rolled `update_flutter_versions.sh` + cron. Config:
   [`.github/renovate.jsonc`](./.github/renovate.jsonc).
-- **Why:** one tool beats scattered glue (a script here, a cron there). Less bespoke code to
-  maintain, and Renovate opens, labels, and throttles the PRs itself. `config:best-practices`
-  additionally SHA-pins the GitHub Actions and digest-pins the `ubuntu` base, which the old cron
-  never did. Given the current wave of CI supply-chain attacks, pinning to immutable digests is
-  worth the extra PR noise.
-- **Why not Dependabot:** Dependabot only updates dependencies inside manifests of ecosystems it
-  understands. The Flutter SDK pin is a bare string in `versions.env`, resolved from Flutter's
-  releases JSON and consumed as a `git clone --branch` tag. No Dependabot ecosystem parses that,
-  and it has no regex/custom-manager escape hatch. Renovate's custom manager plus the
-  `flutter-version` datasource do exactly this.
-- **How the Flutter pin is tracked:** a `customManagers` regex binds the
-  `# renovate: datasource=flutter-version depName=flutter` marker above `FLUTTER_VERSION` in
-  `versions.env`. The `flutter-version` datasource marks only the `stable` channel as stable, so
-  with Renovate's default `ignoreUnstable` the pin only ever moves to a stable release, never a
-  `.pre` beta. The `versions.env` lint in `scripts/test.sh` is a backstop that rejects any
-  non-`x.y.z` value.
-- **One exclusion:** `docker:pinDigests` (pulled in by `best-practices`) would pin every `FROM`,
-  including the `ghcr.io/lahaluhem/android-sdk:latest` that the flutter image falls back to when
-  nothing passes `base_ref`. That tag is republished every run and must float, so a `packageRule`
-  sets `pinDigests: false` for it. Publishes never lean on the fallback, they pass a resolved
-  digest ([`#pinned-base`](#pinned-base)). `ubuntu:24.04` stays digest-pinned, which is multi-arch-safe because
-  Renovate pins the manifest-list digest.
-- **Cadence:** weekly (`schedule:weekly`, a four-hour window early on Mondays), down from the old
-  every-2h cron. Flutter is exempt via a `packageRule` on its datasource, because it ships a stable
-  about every 8 days (12 of them between 2026-06-01 and 2026-08-27) and republishing when it moves
-  is the whole job. Renovate spots a release within the hour but parks the PR until the window, so
-  the exemption is worth up to a week. Everything else stays batched.
-- **CI lint tools:** all four linters (hadolint, actionlint, shellcheck, biome) plus
-  `container-structure-test` come from one image, [Linterpol](https://github.com/LahaLuhem/linterpol),
-  pinned as `LINTERPOL_IMAGE` in [`.github/lint-tools.env`](./.github/lint-tools.env) and tracked by a
-  `customManagers` entry on the `docker` datasource. It follows Linterpol's `1` major line and is
-  digest-pinned, so the registry verifies the bytes on pull and there is no install step to get wrong.
-  Both `scripts/test.sh` and the `build-image.yml` structure-test step read that pin. It replaced
-  per-tool installs that curled `latest` hadolint and ran `download-actionlint.bash` from `main`:
-  unpinned, and a corrupt download once slipped through as a valid-looking HTTP 200 and broke a run.
-- **Grouping:** everything pinned under `images/` batches into one "image dependencies" PR, because
-  each merge republishes and N PRs cost N publishes. The Flutter pin stays on its own, since its PR
-  title is the release note for the whole repo. Non-major only, same as the actions group.
-- **Checking this file:** `scripts/test.sh renovate` runs `renovate-config-validator` from the
-  official renovate image, pinned next to Linterpol in `.github/lint-tools.env`. Opt-in, not part of
-  `lint`: the image is ~1.3 GB and this file changes a few times a year. Not in Linterpol because the
-  validator needs Node and that image is static binaries only. Run it from the repo root with no
-  arguments, or it reads the file as a *global* config and waves almost anything through. It catches
-  unknown options and broken regexes but not bad enum values, so it's a net with holes.
-- **Why not lint Actions:** the standard alternative is official Actions like
-  `hadolint/hadolint-action`, which `best-practices` would SHA-pin automatically. We use the image
-  instead because `scripts/test.sh lint` is the single source of lint truth, and it runs every linter
-  inside the Linterpol container, so a local run and a CI run execute the same bytes rather than
-  merely the same version number. A lint Action runs the tool its own way, which would either split
-  CI from `test.sh` or force us to reconcile the Action's pin with whatever the image carries. One
-  coherent system beats two kept in sync, and it keeps the linters off the host: `lint` needs nothing
-  but Docker.
+- **Why:** one tool instead of a script here and a cron there, and the preset SHA-pins Actions and
+  digest-pins the `ubuntu` base, which the old cron never did.
+- **Why not Dependabot:** the Flutter pin is a bare string in `versions.env` consumed as a
+  `git clone --branch` tag. No Dependabot ecosystem parses that and it has no custom-manager escape
+  hatch. Renovate's custom manager plus the `flutter-version` datasource do.
+- **The pin only ever moves to a stable release,** because `flutter-version` marks only the
+  `stable` channel stable and Renovate skips unstable by default. The `versions.env` lint in
+  `scripts/test.sh` backstops it by rejecting any non-`x.y.z` value.
+- **One exclusion:** `docker:pinDigests` would pin the `ghcr.io/lahaluhem/android-sdk:latest`
+  fallback `FROM`, which is republished every run and must float, so a `packageRule` turns it off
+  for that tag. Publishes never use the fallback anyway, they pass a resolved digest
+  ([`#pinned-base`](#pinned-base)). `ubuntu` stays pinned to its manifest-list digest, so it stays
+  multi-arch-safe.
+- **Weekly, except Flutter.** Flutter ships a stable about every 8 days (12 between 2026-06-01 and
+  2026-08-27) and republishing when it moves is the whole job, so a `packageRule` exempts it from
+  the window. Everything else batches.
+- **Lint tools come from one pinned image.** All four linters plus `container-structure-test` live
+  in [Linterpol](https://github.com/LahaLuhem/linterpol), pinned in
+  [`.github/lint-tools.env`](./.github/lint-tools.env) and read by both `scripts/test.sh` and
+  `build-image.yml`. It replaced per-tool installs that curled `latest`, where a corrupt download
+  once slipped through as a valid-looking HTTP 200 and broke a run.
+- **Grouping:** everything under `images/` batches into one PR, since each merge republishes and N
+  PRs cost N publishes. The Flutter pin stays alone, because its PR title is the release note for
+  the whole repo.
+- **Checking this file:** `scripts/test.sh renovate` runs `renovate-config-validator`. Opt-in, since
+  the image is ~1.3 GB and the file changes a few times a year. **Run it from the repo root**, or it
+  reads the file as a *global* config and waves almost anything through. It catches unknown options
+  and broken regexes, not bad enum values.
+- **Why not lint Actions:** `scripts/test.sh lint` is the single source of lint truth and runs every
+  linter inside the Linterpol container, so local and CI execute the same bytes, not merely the same
+  version number. A lint Action would either split the two or need its pin reconciled with the
+  image's. It also keeps linters off the host: `lint` needs nothing but Docker.
 
 ---
 
 <a id="renovate-automerge"></a>
 ## Renovate automerges the boring tier, gated on one stable check
 
-- **Decision:** Renovate automerges everything under a major via GitHub's native auto-merge
-  (`platformAutomerge`, `automergeStrategy: "rebase"`). `major` still comes to a human. Config:
-  [`.github/renovate.jsonc`](./.github/renovate.jsonc).
-- **Why:** hand-merging a weekly digest re-pin is toil with no judgement in it. Copied from the
-  sibling [`linterpol`](https://github.com/LahaLuhem/linterpol) repo, with one difference that
-  matters (next bullet).
+- **Decision:** Renovate automerges everything under a major through GitHub's native auto-merge
+  (`platformAutomerge`, `automergeStrategy: "rebase"`). `major` still comes to a human.
+- **Why:** hand-merging a weekly digest re-pin is toil with no judgement in it.
 - **Merging here publishes** ([#publish-gating](#publish-gating)), so automerge is auto-publishing.
-  linterpol's isn't: a bare semver tag publishes there, not a push to `main`. It's still safe here
-  because `build-image.yml` structure-tests both arches *before* it pushes, and the manifest merge
-  only runs once both legs pass. A bad bump costs a red `master`, never a bad tag.
-- **Why `minor` automerges too:** CI is the guard and it doesn't care what kind of bump it is.
-  Both images are built and structure-tested on the PR now, on both arches
-  ([`#pr-flutter-build`](#pr-flutter-build)), so a bad minor is caught before the merge rather
-  than after it. The old worry, that a
-  minor moves the toolchain under every consumer, is the tag's job now: pin `flutter:<x.y>`
-  ([#floating-minor-tag](#floating-minor-tag)). `major` still waits for a human.
+  That is safe because `build-image.yml` structure-tests both arches *before* it pushes, and the
+  manifest merge runs only once both legs pass. A bad bump costs a red `master`, never a bad tag.
+  (The sibling [`linterpol`](https://github.com/LahaLuhem/linterpol) repo publishes on a tag
+  instead, so its automerge carries no such weight.)
+- **Why `minor` automerges too:** CI is the guard and it doesn't care what kind of bump it is. Both
+  images are built and structure-tested on the PR, on both arches
+  ([`#pr-flutter-build`](#pr-flutter-build)). The old worry, that a minor shifts the toolchain under
+  every consumer, is the tag's job now: pin `flutter:<x.y>`
+  ([#floating-minor-tag](#floating-minor-tag)).
 - **`ubuntu` is held to LTS tags.** `26.04` to `26.10` reads as a *minor*, so it would ride along
-  with the rule above, but an interim release gets 9 months of support instead of 5 years and
-  nothing in CI can see that, because nothing breaks. An `allowedVersions` regex (even year plus
-  `.04`) keeps only LTS in scope, so `26.04` to `28.04` stays a major. Renovate ships the same
-  trick for JDK images as `workarounds:javaLTSVersions`.
-- **`images-ok` exists because the reusable-call check names aren't stable.** `android-sdk` and
-  `flutter` are `workflow_call` jobs, so the contexts they report depend on the path gate:
-  `android-sdk` (skipped) on a docs-only PR, but `android-sdk / build (linux/amd64)`,
-  `android-sdk / build (linux/arm64)`, and `android-sdk / merge` when it runs. A ruleset can only
-  name fixed contexts, so requiring either spelling blocks every PR that reports the other.
-  `images-ok` in [`build_and_push.yml`](./.github/workflows/build_and_push.yml) `needs` all three
-  jobs with `if: always()` and fails only on `failure` or `cancelled`, so it reports under one name
-  on every PR and is green when the gate skipped the build.
+  with the rule above, but an interim release gets 9 months of support instead of 5 years and no CI
+  can see that, because nothing breaks. An `allowedVersions` regex (even year plus `.04`) keeps only
+  LTS in scope, so `26.04` to `28.04` stays a major.
+- **`images-ok` exists because reusable-call check names aren't stable.** `android-sdk` and
+  `flutter` are `workflow_call` jobs, so the contexts they report change with the path gate: one
+  name when skipped, three (`build (linux/amd64)`, `build (linux/arm64)`, `merge`) when it runs. A
+  ruleset can only name fixed contexts, so requiring either spelling blocks every PR reporting the
+  other. `images-ok` in [`build_and_push.yml`](./.github/workflows/build_and_push.yml) `needs` all
+  three with `if: always()`, fails only on `failure` or `cancelled`, and so reports under one name
+  every time.
 - **The ruleset is load-bearing, not decoration.** GitHub auto-merge waits only on *required*
-  checks and ignores failing ones that aren't required, so automerge with nothing required would
-  merge broken builds; Renovate's own docs warn about exactly this. `master`'s ruleset requires
-  `lint` and `images-ok` and nothing else. Renaming either job silently un-gates automerge, which
-  is why that's a hard rule and not a comment.
-- **`automergeStrategy: "rebase"`** because the ruleset requires linear history, so the platform
-  default (a merge commit) would be rejected. It also needs "Allow rebase merging" enabled on the
-  repo: with it off, GitHub refuses the auto-merge call and Renovate falls back to its own
-  automerge, which merges on its own reading of branch status rather than the ruleset's.
-- **Was rejected, now done: building `flutter` on pull requests.** The old reason was that a PR
-  build would have to sit on the already-published `android-sdk:latest`, so a PR touching both
-  images would check against the wrong base and pass anyway. `base_ref`
-  ([`#pinned-base`](#pinned-base)) killed that reason, and PRs now build flutter on the
-  android-sdk from the same checkout ([`#pr-flutter-build`](#pr-flutter-build)). A `versions.env`
-  bump no longer automerges on zero flutter validation.
-- **Rejected: decoupling publish from merge** (publish on a tag, as linterpol does). That would
-  make automerge trivially safe, but this repo exists to republish when Flutter moves, so it would
-  only relocate the manual step from merging the PR to cutting the tag.
+  checks and ignores failing ones that aren't, so automerge with nothing required would merge broken
+  builds. `master` requires `lint` and `images-ok` and nothing else. Renaming either job silently
+  un-gates automerge, which is why it is a hard rule and not a comment.
+- **`automergeStrategy: "rebase"`** because the ruleset requires linear history. It also needs
+  "Allow rebase merging" on the repo: with it off, GitHub refuses the auto-merge call and Renovate
+  falls back to its own, which merges on its reading of branch status rather than the ruleset's.
+- **Rejected: decoupling publish from merge** (publish on a tag, as linterpol does). It would make
+  automerge trivially safe, but this repo exists to republish when Flutter moves, so it only moves
+  the manual step from merging the PR to cutting the tag.
 
 ---
 
 <a id="ndk-cmake-not-baked"></a>
-## `build-tools` is baked to match AGP; the NDK and CMake are deliberately not
+## `build-tools` is baked to match AGP, but the NDK and CMake aren't
 
-- **Decision:** bake the `build-tools` revision **AGP asks for**; do **not** bake the NDK or CMake,
+- **Decision:** bake the `build-tools` revision **AGP asks for**, and do **not** bake the NDK or CMake,
   even though a bare `flutter build apk --debug` fetches both mid-build. So
   `scripts/check-android-sdk.sh` tracks the platform, holds cmdline-tools, and leaves build-tools
   alone.
@@ -582,7 +537,7 @@ verified. A present manifest is not a verified build.
   readable from the Flutter clone the image already carries, at
   `$FLUTTER_HOME/packages/flutter_tools/lib/src/android/gradle_utils.dart` (`const ndkVersion`,
   mirrored in `gradle/src/main/kotlin/FlutterExtension.kt`), so a `RUN` can derive it and stay
-  correct across Flutter bumps. CMake would need a manual pin; Flutter never references it.
+  correct across Flutter bumps. CMake would need a manual pin, since Flutter never references it.
 - **Guard:** `scripts/test.sh apk` fails if Gradle installs anything under `/opt` except the NDK or
   CMake, turning a pin that drifts from AGP's request into a red test rather than a silent
   per-build download. That allowlist is this decision in executable form.
@@ -652,11 +607,11 @@ verified. A present manifest is not a verified build.
 - **Why `BOT`:** the version check has no dedicated env var (`--no-version-check` is
   per-invocation only), so bot detection is its only bakeable lever. `flutter` and `dart` read the
   same env list via flutter_tools' `BotDetector` / dartdev's `isBot()`
-  (`lib/src/base/bot_detector.dart`, an internal lever, not user-facing docs); `BOT=true` trips it,
+  (`lib/src/base/bot_detector.dart`, an internal lever, not user-facing docs). `BOT=true` trips it,
   covering both the version check and analytics for every user (an env var, not a per-`HOME`
   opt-out file). `FLUTTER_SUPPRESS_ANALYTICS` is the self-documenting belt for Flutter's side.
 - **Why not `CI=true`:** redundant and too broad. `BOT` already trips bot detection, so `CI` adds
-  nothing for flutter/dart; meanwhile `CI` is honoured by many unrelated tools (npm, test runners),
+  nothing for flutter/dart. Meanwhile `CI` is honoured by many unrelated tools (npm, test runners),
   so baking it would force everything a consumer runs in the container into CI mode, a runtime
   assumption the portable-image rule avoids. Real CI sets `CI` itself anyway, so baking it would
   only surprise local `docker run`. `BOT` is the surgical pick.
@@ -695,131 +650,62 @@ verified. A present manifest is not a verified build.
 <a id="build-setup-android"></a>
 ## Build-env setup helpers: `ch-build-setup-android` + `ch-fetch-firebase-config`
 
-- **Decision:** the `flutter` image ships an inert helper on `PATH`, `ch-build-setup-android`,
-  that materialises the files an Android `flutter build apk|aab` expects, a
-  `--dart-define-from-file` file, `android/app/google-services.json` (fetched from Firebase, see
-  below), and dev signing (a keystore plus `android/key.properties`), from namespaced `CH_BUILD_*`
-  env vars. It is called explicitly in a build job and does nothing on its own. A second helper,
-  `ch-fetch-firebase-config`, performs the Firebase fetch and is usable standalone.
-- **Why it counts as in scope, though it looks like consumer logic:** the portable-image rule
-  ([#quiet-ci-defaults](#quiet-ci-defaults)) forbids *runtime assumptions*, things that change
-  behaviour for every command by default (why `CI=true` was rejected). It does not forbid inert
-  tools you opt into by name. This helper is the same shape as the DX CLIs already baked in
-  ([#dx-tools-native](#dx-tools-native)): on `PATH`, no effect until called, no CI system assumed
-  (it reads only env vars, which every CI provides). So it sits with `cider`, not with `CI=true`.
-  The worry about wasted file I/O on non-build jobs is moot for free: those jobs never call it.
-- **Three orthogonal lanes; two opt-in, signing always-on.** The helper runs three independent
-  things, dart-defines, google-services, and dev signing, in any combination. dart-defines and
-  google-services are opt-in: with none of their vars set they do nothing (dart-defines is a
-  variadic list, skip-if-empty; google-services is an all-or-nothing set of three, where a partial
-  set is a fail-fast error). Signing is deliberately always-on: every run generates a dev keystore
-  and writes `android/key.properties` unless that file already exists. It stays always-on because,
-  unlike the Firebase fetch (a real credential plus a network call), it only mints a *local
-  throwaway* keystore with no external dependency and no secret, so the get-going convenience costs
-  nothing and needs no opt-in. Gating it on a required keystore password (so a no-vars run produces
-  nothing too) is a possible later mode; the asymmetry is intentional, not an oversight.
-- **dart-defines need no invented format, and the file carries no "type".** Traced through stable
-  `flutter_tools`: [`extractDartDefineConfigJsonMap`](https://github.com/flutter/flutter/blob/stable/packages/flutter_tools/lib/src/runner/flutter_command.dart)
-  content-sniffs a `--dart-define-from-file` file as JSON vs `.env` by a leading `{`
-  (`configRaw.trim().startsWith('{')`), i.e. by **content, not the file extension**; the `.env`
-  branch builds a `Map<String,String>` while the JSON branch
-  keeps typed values, but both are emitted as defines via `'$key=$value'` (`.toString()`). So
-  `.env` `DEBUG=true` and JSON `{"DEBUG":true}` yield the *identical* define `DEBUG=true`; the
-  Dart type is chosen at the read site (`String`/`bool`/`int.fromEnvironment`), not in the file.
-  So the helper writes plain per-key `KEY=value` lines verbatim. The user quotes values that need
-  it (flutter strips wrapping quotes, treats an unquoted trailing `#` as a comment, and rejects
-  multi-line values). No delimiter to invent, no JSON to assemble, and no base64 by default
-  (base64 was only a CI-specific escaping workaround, not part of the general mechanism). The lane
-  lives in a standalone `ch-write-dart-defines` that `ch-build-setup-android` delegates to (parallel
-  to the fetcher extraction below), so a job that only needs the env file, e.g. an iOS build on a
-  macOS runner, can curl and run it alone, without the orchestrator's keytool/signing dependency.
-- **google-services is fetched from Firebase, not pasted as a blob.** An earlier
-  `CH_BUILD_ANDROID_GOOGLE_SERVICES` (the whole `google-services.json` in one secret) was replaced,
-  not complemented: the helper now fetches the config at build time from the Firebase Management
-  API (`projects/-/androidApps/<appId>/config`, the same "apps getConfig" call `firebase
-  apps:sdkconfig` wraps) and writes `android/app/google-services.json`. Fetching keeps the config in
-  sync with Firebase and a full blob out of the secret store. The Firebase CLI is deliberately *not*
-  installed for this: its standalone binary is ~250 MB and **x86-64-only** (no arm64 build, so on
-  the arm64 image it would run emulated for one HTTP GET), and the npm route drags the whole Node
-  runtime plus a large dependency tree into both images. getConfig is a single authenticated
-  request, so the helper makes it directly with `curl` + `jq` + `openssl` (all small; only `openssl`
-  had to be added to the android-sdk image). The `projects/-` wildcard resolves the app's project
-  from the app id, so no project id is an input.
-- **Non-interactive auth is a self-signed JWT, and the IAM floor is one permission.** The supported
-  CI auth for the Firebase CLI is a service-account key via `GOOGLE_APPLICATION_CREDENTIALS` (the
-  legacy `FIREBASE_TOKEN` / `login:ci` / `--token` is deprecated, and keyless WIF is buggy in
-  firebase-tools v15). Rolling our own skips the key file: the helper mints a short-lived OAuth2
-  token via the JWT-bearer flow, signing the assertion with `openssl` (RS256). That flow reads only
-  two fields of a service-account key, `client_email` and `private_key` (`token_uri` is the static
-  Google endpoint), so those are the only credential inputs; the rest of the key JSON (`project_id`,
-  `private_key_id`, `client_id`, the cert URLs, `universe_domain`) is never used, and reconstructing
-  a full JSON from them would be inert filler. Empirically the service account needs exactly
-  **`firebase.clients.get`**: a probe SA holding only that permission fetched the config, and five
-  other candidate permissions it did *not* hold were thereby proven unnecessary. The predefined
-  *Firebase Viewer* role includes `firebase.clients.get`, so it is the least-privilege stock role.
-- **The fetch lives in a shared `ch-fetch-firebase-config`, and the credential is project-scoped.**
-  getConfig differs across platforms only in the resource segment (`androidApps` vs `iosApps`) and
-  the output file (`google-services.json` vs `ios/Runner/GoogleService-Info.plist`); the token flow
-  and credential are identical (verified: one service account fetched both an Android and an iOS
-  config). So the fetch was extracted into a standalone, curl-able
-  `ch-fetch-firebase-config --android|--ios` that `ch-build-setup-android` delegates to. `--ios` is
-  enabled even though iOS *building* is out of scope (the `flutter-mac` rejected path in
-  [#arm64-android-build-limitation](#arm64-android-build-limitation)): the fetch is only a network
-  call, so it is useful standalone on a macOS runner, while nothing here builds iOS. Because the
-  service account is project-scoped, its credential is shared across platforms: `client_email` /
-  `private_key` are the platform-neutral `CH_BUILD_FIREBASE_*`, while only the app id is per-platform
-  (`CH_BUILD_ANDROID_FIREBASE_APP_ID`, `CH_BUILD_IOS_FIREBASE_APP_ID`), so it is never pasted twice.
-  The private key is accepted in whatever form a CI variable can hold: a PEM (real or literal-`\n`
-  newlines), base64 of a PEM, or a bare base64 body. CI UIs such as GitLab reject the spaces in the
-  `-----BEGIN PRIVATE KEY-----` header, so the helper reconstructs the PEM from a header-less body
-  and decodes base64; whatever the form, it is normalised in-shell and piped to `openssl` through a
-  process substitution, so it never lands on disk. `--dry-run` makes no network call.
-- **The fetch skips an existing config; the dart-define writer overwrites.** `ch-fetch-firebase-config`
-  leaves the destination alone when it already exists and re-fetches only with `--force`. The fetch
-  is a signed JWT plus two HTTPS round-trips against config that is stable per Firebase project, so
-  re-fetching over a file that is already there is wasted work (network and crypto, not just I/O),
-  and the check runs before the credentials are read, so a re-run with the file in place needs
-  nothing else set. This matches the signing lane, which likewise leaves an existing keystore and
-  `key.properties` untouched. `ch-write-dart-defines` deliberately does the opposite and always
-  writes: its input is the `CH_BUILD_DEFINE_*` environment, which is meant to change between builds
-  (a dev vs staging URL, a flag), so skipping when the file exists would silently keep stale defines
-  after you change one, and the output is a tiny local file with nothing to save by skipping. The
-  orchestrator inherits both (it calls the fetcher without `--force`), so a forced refresh is run
-  through `ch-fetch-firebase-config --android --force` directly.
-- **Keystore is generate-if-absent, with its path exposed for caching.** `keytool` mints a fresh
-  random keypair on every run, so regenerating the keystore each job gives an *unstable* signing
-  key no matter the password. The helper writes the keystore only when it is missing and publishes
-  its path, so a build job can cache it and keep the signing key stable across runs. A stable key
-  on clean runners still needs a user-provided keystore (a possible later mode). The default
-  password is a get-going convenience, not a stability lever.
-- **PKCS12-only, one password.** JKS is deprecated, so the helper always generates a PKCS12
-  keystore (no type knob, and keytool's migration warning is gone). PKCS12 uses one password for
-  the store and the key, so the two password vars were collapsed into a single
-  `CH_BUILD_ANDROID_KEYSTORE_PASSWORD`; making them unequal is now impossible, which removes the
-  classic PKCS12 mismatch footgun. Validated empirically: `apksigner`, the tool Gradle invokes to
-  sign, signed an APK with the generated keystore. A literal `flutter build apk --release` could
-  not confirm it end to end on the arm64 host because Android release AOT needs the x86 path
-  ([#arm64-android-build-limitation](#arm64-android-build-limitation)), which is the image's known
-  limitation, not a signing issue.
-- **Why `CH_BUILD_CACHE_*` names the keystore path.** That file is invisible to the user except as
-  something to cache, so it is named for that purpose, not as an internal output path. The prefix
-  is forward-looking: other cacheable locations can join it, and the Gradle caches have (next point). The
-  build-command path is a separate var (`CH_BUILD_DART_DEFINE_FILE`) because its purpose is to be
-  passed to `--dart-define-from-file`. Both are baked as *relative* image `ENV`s: a child process
-  cannot export into the parent job shell, but a constant path can be baked once and referenced by
-  both the helper and the user.
-- **Gradle caching is two narrow paths, not all of `~/.gradle`.** The family grew to cover Gradle
-  via `CH_BUILD_CACHE_GRADLE_MODULES` (`caches/modules-2`, dependencies) and
-  `CH_BUILD_CACHE_GRADLE_DISTS` (`wrapper/dists`, the distribution), with `GRADLE_USER_HOME` pinned
-  to its default so both resolve deterministically. Caching the whole `~/.gradle` was rejected: it
-  also holds the daemon, lock files, and execution history, churn that bloats a cache without
-  helping, and `modules-2` alone can reach several GB. Unlike the keystore (an image-produced
-  artifact at a project-relative path), these are absolute, standard Gradle locations the helper
-  never touches, so they are pure cache hints for the consumer to opt into.
-- **No direnv; a single in-script var registry instead.** The `CH_BUILD_*` surface will grow, but
-  direnv (`.envrc`) is a per-directory env *loader* for interactive shells. It mismatches CI and
-  `docker run` sourcing (vars arrive from the secret store or `--env-file`, non-interactively) and,
-  more to the point, manages no defaults or schema. Growth is a *registry* problem, so the
-  defaults, `--help`, and the README var table all derive from one in-script source of truth. That
-  stays pure shell with no new image dependency (no direnv, no YAML parser); `docker run
-  --env-file` covers local multi-var runs natively.
+- **Decision:** the `flutter` image ships `ch-build-setup-android` on `PATH`. It writes the files an
+  Android `flutter build apk|aab` expects (a `--dart-define-from-file` file,
+  `android/app/google-services.json`, dev signing) from `CH_BUILD_*` env vars, and does nothing
+  until a build job calls it. `ch-fetch-firebase-config` does the Firebase half and runs standalone.
+- **Why it is in scope though it looks like consumer logic.** The portable-image rule
+  ([#quiet-ci-defaults](#quiet-ci-defaults)) bans *runtime assumptions*, not inert tools you opt
+  into by name. Same shape as the DX CLIs ([#dx-tools-native](#dx-tools-native)): on `PATH`, no
+  effect until called, no CI system assumed. So it sits with `cider`, not with `CI=true`.
+- **Three lanes, two opt-in, signing always-on.** dart-defines and google-services do nothing unless
+  their vars are set (a partial Firebase set is a fail-fast error). Signing always runs because it
+  only mints a local throwaway keystore, no credential and no network, so there is nothing worth
+  opting out of. Gating it behind a required password is a possible later mode.
+- **dart-defines need no invented format.** flutter_tools picks JSON vs `.env` by
+  [content, not file extension](https://github.com/flutter/flutter/blob/stable/packages/flutter_tools/lib/src/runner/flutter_command.dart)
+  (a leading `{`), and both branches end up as the same `KEY=value` define. So the helper writes
+  plain per-key lines verbatim: no delimiter to invent, no base64. The lane lives in a standalone
+  `ch-write-dart-defines`, so a job that only needs the env file (an iOS build on a macOS runner,
+  say) can curl it without dragging in keytool.
+- **google-services is fetched, not pasted as a blob.** An earlier "whole file in one secret" var
+  was replaced by a build-time call to the Firebase Management API, which keeps the config in sync
+  and the blob out of the secret store. The Firebase CLI is deliberately not installed for it: the
+  standalone binary is ~250 MB and x86-64-only (so, emulated on arm64 for one HTTP GET), and the npm
+  route drags Node into both images. One authenticated request needs only `curl` + `jq` + `openssl`.
+- **The IAM floor is one permission, measured.** A probe service account holding only
+  **`firebase.clients.get`** fetched the config, which also proved five other candidate permissions
+  unnecessary. The stock *Firebase Viewer* role includes it. Auth is a self-signed JWT rather than a
+  key file, and it reads only `client_email` and `private_key`, so those are the only inputs.
+- **One fetcher for both platforms.** getConfig differs only in the resource segment and the output
+  path, and the credential is project-scoped, so `ch-fetch-firebase-config --android|--ios` covers
+  both (verified: one service account fetched an Android and an iOS config). `CH_BUILD_FIREBASE_*`
+  is shared and only the app id is per-platform. `--ios` ships even though iOS *building* is out of
+  scope, because a network call is still useful on a macOS runner.
+- **The private key is taken in any shape a CI variable can hold:** a PEM, `\n`-escaped, base64 of a
+  PEM, or a bare base64 body. Some CI variable UIs reject the spaces in the
+  `-----BEGIN PRIVATE KEY-----` header, hence the header-less form. It is normalised in-shell and
+  piped to `openssl`, never written to disk.
+- **The fetch skips an existing config, the dart-define writer overwrites.** Firebase config is
+  stable per project, so re-fetching burns a JWT and two round-trips for nothing. Dart-defines are
+  meant to change between builds, so skipping would silently keep stale values. Signing follows the
+  fetch and leaves an existing keystore alone.
+- **Keystore is generate-if-absent, and its path is published for caching.** `keytool` mints a fresh
+  random keypair every run, so regenerating per job gives an unstable signing key whatever the
+  password. Cache `CH_BUILD_CACHE_KEYSTORE` to keep one key across runs.
+- **PKCS12 only, one password.** JKS is deprecated, and PKCS12 uses one password for both store and
+  key, so the two password vars collapsed into `CH_BUILD_ANDROID_KEYSTORE_PASSWORD` and the classic
+  mismatch footgun is gone. Validated with `apksigner`, the tool Gradle actually signs with. A full
+  `--release` build could not confirm it end to end on arm64, which is the image's known limitation
+  ([#arm64-android-build-limitation](#arm64-android-build-limitation)), not a signing problem.
+- **Why `CH_BUILD_CACHE_*` names paths.** The keystore is invisible to the user except as something
+  to cache, so it is named for that. The prefix now also covers the two Gradle paths
+  (`caches/modules-2`, `wrapper/dists`) and the NDK ([#ndk-cache-not-pruned](#ndk-cache-not-pruned)).
+  Caching all of `~/.gradle` was rejected, since it also holds daemon logs, lock files and execution
+  history, churn with no payoff. Build-command paths get their own var
+  (`CH_BUILD_DART_DEFINE_FILE`): a child process cannot export into the parent job shell, but a
+  baked constant can be read by both sides.
+- **No direnv, one in-script var registry instead.** direnv loads env for interactive shells and
+  manages no defaults or schema, which is the actual problem as the `CH_BUILD_*` surface grows. So
+  the defaults, `--help`, and the README table all derive from one source of truth in the script,
+  in pure shell with no new image dependency.

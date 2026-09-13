@@ -13,13 +13,14 @@ ENV FLUTTER_HOME=/opt/flutter \
     FLUTTER_VERSION=$flutter_version
 ENV FLUTTER_ROOT=$FLUTTER_HOME
 
-# `dart pub global activate` installs tool executables under PUB_CACHE; its bin/ on PATH makes
-# them bare commands. /root/.pub-cache is Dart's default for root; set explicitly for clarity.
+# `dart pub global activate` installs tool executables under PUB_CACHE, and its bin/ on PATH
+# makes them bare commands. /root/.pub-cache is Dart's default for root, set here for clarity.
 ENV PUB_CACHE=/root/.pub-cache
 ENV PATH=${PATH}:${FLUTTER_HOME}/bin:${FLUTTER_HOME}/bin/cache/dart-sdk/bin:${PUB_CACHE}/bin
 
-# Quiet CI defaults (override with `-e BOT=false`): FLUTTER_SUPPRESS_ANALYTICS no-ops Flutter analytics; BOT=true trips flutter+dart bot detection,
-# which no-ops Dart analytics and skips Flutter's version-freshness check.
+# Quiet CI defaults, override with `-e BOT=false`. FLUTTER_SUPPRESS_ANALYTICS no-ops Flutter
+# analytics. BOT=true trips flutter+dart bot detection, which no-ops Dart analytics and skips
+# Flutter's version-freshness check.
 # Rationale, including why not CI=true: ../../APPENDIX.md#quiet-ci-defaults
 # BOT is an internal flutter_tools lever, not a documented one:
 # https://github.com/flutter/flutter/blob/stable/packages/flutter_tools/lib/src/base/bot_detector.dart

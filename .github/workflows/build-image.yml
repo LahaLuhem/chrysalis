@@ -128,9 +128,9 @@ jobs:
         run: |
           # container-structure-test from the Linterpol image, pinned in .github/lint-tools.env
           # (single source, read the same way as scripts/test.sh). The image-under-test was loaded
-          # into the runner's daemon by "Build for test (load)"; mount the runner's Docker socket so
+          # into the runner's daemon by "Build for test (load)". Mount the runner's Docker socket so
           # the container reaches it, run as root for socket access, and use the default daemon driver
-          # (specs use commandTests; tar can't run those).
+          # (specs use commandTests, which the tar driver can't run).
           LINTERPOL_IMAGE="$(grep -E '^LINTERPOL_IMAGE=' .github/lint-tools.env | cut -d= -f2-)"
           docker run --rm --user 0:0 \
             -v /var/run/docker.sock:/var/run/docker.sock \
@@ -160,8 +160,8 @@ jobs:
         run: ./scripts/assert_oci_layout.sh "${{ runner.temp }}/oci-${{ inputs.name }}"
 
       # Generate OCI labels (image config) + manifest-level annotations from the build context.
-      # title/description are per-image inputs; source/revision/created/version/licenses fill in
-      # from the repo and the build commit. The Dockerfiles carry no LABELs; this is the single
+      # title/description are per-image inputs. source/revision/created/version/licenses fill in
+      # from the repo and the build commit. The Dockerfiles carry no LABELs, so this is the single
       # source. tags are fed only so org.opencontainers.image.version reflects the primary tag;
       # the merge step does the actual tagging from inputs.tags.
       - name: Compose image tag specs for metadata
@@ -192,7 +192,7 @@ jobs:
           DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest
 
       # Push by digest, reusing the cached layers from the test build above. oci-mediatypes=true
-      # makes the pushed manifest, config, and layers use OCI media types; labels + manifest
+      # makes the pushed manifest, config, and layers use OCI media types. Labels + manifest
       # annotations come from metadata-action (the Dockerfiles carry none).
       - name: Build and push by digest
         id: build
@@ -254,7 +254,7 @@ jobs:
 
       # Index-level OCI annotations for the manifest list (the consumer-visible set). Same metadata
       # source as the per-arch build, but annotations level = index here. tags feed only the version
-      # field; actual tagging is done below from inputs.tags.
+      # field, and the actual tagging is done below from inputs.tags.
       - name: Compose image tag specs for metadata
         id: tagspecs
         env:
@@ -316,8 +316,8 @@ jobs:
 
       # A publish is only "done" when the pushed image carries both arches (hard rule 8) and uses
       # OCI media types end to end. assert_oci_registry.sh checks the index, both arches, and every
-      # manifest/config/layer; crane then validates the image is structurally well-formed. --fast
-      # skips re-downloading layer blobs (~6 GB/publish, half the pipeline's critical path); their
+      # manifest/config/layer. crane then validates the image is structurally well-formed. --fast
+      # skips re-downloading layer blobs (~6 GB/publish, half the pipeline's critical path), and their
       # digests are already verified by the registry on push and by every client on pull.
       - name: Verify the published image (OCI media types + crane validate)
         shell: bash

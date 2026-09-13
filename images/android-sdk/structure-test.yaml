@@ -2,7 +2,7 @@ schemaVersion: 2.0.0
 
 # Structural assertions for the android-sdk image. Component versions
 # (build-tools 36.0.0, platform android-36) mirror the Dockerfile alongside this
-# spec; bump them here in lockstep if the Dockerfile changes.
+# spec, so bump them here in lockstep if the Dockerfile changes.
 
 metadataTest:
   envVars:
@@ -36,7 +36,7 @@ fileExistenceTests:
     shouldExist: false
   - name: x86-64 dynamic loader present (arm64 runs the SDK tools under emulation)
     # On amd64 this is the native loader. On arm64 it exists only because the
-    # Dockerfile bakes libc6:amd64 (the arm64 emulation-libs layer); its absence
+    # Dockerfile bakes libc6:amd64 (the arm64 emulation-libs layer), and its absence
     # there means the x86-64 libs were dropped and Android builds would fail.
     path: /lib64/ld-linux-x86-64.so.2
     shouldExist: true
@@ -53,7 +53,7 @@ commandTests:
     args: ['-c', 'test -n "$JAVA_HOME" && "$JAVA_HOME/bin/javac" -version']
     exitCode: 0
   # yq DX tool (downloaded static Go binary): proves it's on PATH and runs. exitCode-only and
-  # version-agnostic (Renovate bumps it); a wrong-arch binary wouldn't execute, so an exit 0
+  # version-agnostic (Renovate bumps it). A wrong-arch binary wouldn't execute, so an exit 0
   # here also confirms the amd64/arm64 download matched the image arch.
   - name: yq is runnable (YAML DX tool)
     command: yq

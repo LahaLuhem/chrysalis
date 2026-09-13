@@ -9,7 +9,7 @@
 # self-contained enough to curl from GitHub and run on any CI runner.
 #
 # It reads namespaced CH_BUILD_* environment variables (so it assumes no particular CI system).
-# The service account is project-scoped and shared across platforms; only the app id is
+# The service account is project-scoped and shared across platforms, and only the app id is
 # per-platform:
 #
 #   CH_BUILD_FIREBASE_CLIENT_EMAIL     the service account (needs the firebase.clients.get role)
@@ -17,7 +17,7 @@
 #   CH_BUILD_ANDROID_FIREBASE_APP_ID   the Android app id, read for --android (1:NN:android:XX)
 #   CH_BUILD_IOS_FIREBASE_APP_ID       the iOS app id, read for --ios (1:NN:ios:XX)
 #
-# Run it from your Flutter project root; it writes the platform's standard path unless --out is
+# Run it from your Flutter project root. It writes the platform's standard path unless --out is
 # given. If the destination already exists it is left untouched (pass --force to re-fetch), since
 # the fetch is a signed JWT plus two HTTPS calls against config that is stable per project. Why roll
 # our own instead of the Firebase CLI, and the minimal IAM role: ../../APPENDIX.md#build-setup-android.
@@ -42,10 +42,10 @@ the apps getConfig API. Run from your Flutter project root.
   --ios            fetch GoogleService-Info.plist -> ios/Runner/GoogleService-Info.plist
   --out FILE       write to FILE instead of the platform default
   -f, --force      re-fetch even if the destination already exists (default: skip when present)
-  -n, --dry-run    show what would be fetched/written; make no network call, write nothing
+  -n, --dry-run    show what would be fetched/written, with no network call and nothing written
   -h, --help       this help
 
-Environment (the service account is shared across platforms; the app id is per-platform):
+Environment (the service account is shared across platforms, the app id is per-platform):
   CH_BUILD_FIREBASE_CLIENT_EMAIL     the service account (needs the firebase.clients.get role)
   CH_BUILD_FIREBASE_PRIVATE_KEY      its private key: a PEM, base64 of a PEM, or a header-less
                                      base64 body (for CI vars that reject the header's spaces)
@@ -83,7 +83,7 @@ normalize_private_key() {
 
 # Mint a short-lived Google OAuth2 access token for a service-account client email ($1) and
 # private key ($2), via the signed-JWT bearer flow, and print it. token_uri is the static Google
-# endpoint; the key is normalised to PEM (see normalize_private_key) and piped to openssl through
+# endpoint. The key is normalised to PEM (see normalize_private_key) and piped to openssl through
 # a process substitution, so it never lands on disk. Any failure here calls die, which aborts the
 # whole script (set -e propagates it out of the $() capture).
 mint_sa_token() {
@@ -129,7 +129,7 @@ main() {
 
   # Per-platform lookup: API resource kind, default output path, the app-id env var, and the token
   # an app id of that platform must contain. getConfig, the token flow and the credential vars are
-  # identical across platforms; only these values differ. Keep in sync with ch-build-setup-* and
+  # identical across platforms, only these values differ. Keep in sync with ch-build-setup-* and
   # APPENDIX.md#build-setup-android.
   local api_kind out_default appid_var appid_token
   case "$platform" in
@@ -156,9 +156,9 @@ main() {
   # setup untouched (see ch-build-setup-android).
   if [ "$force" -eq 0 ] && [ -f "$dest" ]; then
     if [ "$dry_run" -ne 0 ]; then
-      log "[dry-run] $dest exists; would leave it untouched (use --force to re-fetch)"
+      log "[dry-run] $dest exists, would leave it untouched (use --force to re-fetch)"
     else
-      log "$dest exists; leaving it untouched (use --force to re-fetch)"
+      log "$dest exists, leaving it untouched (use --force to re-fetch)"
     fi
     return 0
   fi
@@ -167,7 +167,7 @@ main() {
   app_id="${!appid_var:-}"
   email="${CH_BUILD_FIREBASE_CLIENT_EMAIL:-}"
   key="${CH_BUILD_FIREBASE_PRIVATE_KEY:-}"
-  [ -n "$app_id" ] || die "$appid_var is required (the $platform app id; try --help)"
+  [ -n "$app_id" ] || die "$appid_var is required (the $platform app id, try --help)"
   [ -n "$email" ]  || die "CH_BUILD_FIREBASE_CLIENT_EMAIL is required (try --help)"
   [ -n "$key" ]    || die "CH_BUILD_FIREBASE_PRIVATE_KEY is required (try --help)"
   case "$app_id" in
