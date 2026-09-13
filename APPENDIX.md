@@ -4,7 +4,7 @@
 - [Why this fork exists: maintained *and* multi-arch](#why-multi-arch)
 - [arm64 Linux builds Android only under x86-64 emulation](#arm64-android-build-limitation)
 - [The Android emulator isn't shipped](#no-emulator)
-- [The `android` CLI can't be used here: it's x86-64 only](#no-android-cli)
+- [cmdline-tools stays at rev 22, and the image deletes `bin/android`](#no-android-cli)
 - [Flutter is installed by `git clone`, not the release tarball](#flutter-clone-not-tarball)
 - [Multi-arch via native matrix + push-by-digest + manifest merge](#digest-merge-multiarch)
 - [OCI-native images](#oci-native-images)
@@ -169,10 +169,11 @@ build.
 ---
 
 <a id="no-android-cli"></a>
-## cmdline-tools stays at rev 22: rev 23 installs through an x86-64-only launcher
+## cmdline-tools stays at rev 22, and the image deletes `bin/android`
 
-- **Decision:** hold `ANDROID_SDK_TOOLS_VERSION` at rev 22 (`15859902`) and keep installing SDK
-  packages with `sdkmanager`, deprecated as it is. Don't move to `android sdk install`.
+- **Decision:** hold `ANDROID_SDK_TOOLS_VERSION` at rev 22 (`15859902`), keep installing SDK packages
+  with `sdkmanager`, deprecated as it is, and delete `bin/android` from the image. Don't move to
+  `android sdk install`.
 - **What rev 23 actually changed.** One file that matters: `bin/sdkmanager` stopped being a JVM
   launcher and became a shim that hands every install to `bin/android`. That binary is
   byte-identical in rev 22 and rev 23 (same SHA-256), so this isn't an arch regression, rev 23 just
@@ -181,15 +182,22 @@ build.
 - **Why that blocks us:** the image installs packages by running `sdkmanager` during `docker build`,
   and the arm64 leg builds natively with no x86-64 emulation (hard rule 4). On rev 23 those `RUN`
   lines die with `Exec format error`, exit 126.
-- **`android` is not the CLI, it's a downloader.** A ~5 MB launcher that fetches the real 87 MB CLI
-  on first use from `dl.google.com/android/cli/latest/<platform>/android-cli` and caches it in
-  `$HOME/.android/bin`. Google serves `linux_x86_64` and `darwin_arm64`, so the URL we'd need 404s.
+- **Holding the pin wasn't enough on its own.** The hold covers `docker build`. It does nothing for
+  consumer builds, because `bin/android` ships in rev 22 too and flutter_tools picks its SDK tool with
+  a bare `existsSync()`. [flutter#191826](https://github.com/flutter/flutter/pull/191826) would then
+  hand Gradle `-Pflutter.androidCliPath` and never fall back to `sdkmanager`. Deleting the file is what
+  puts that out of reach, on both arches, whatever upstream does.
+- **`android` is not the CLI, it's a downloader.** A ~5 MB launcher that fetches the real CLI on
+  first use from `dl.google.com/android/cli/latest/<platform>/android-cli`. Measured: 87,324,848 B
+  down, **239 MB on disk** once its bundled JRE and 53 MB `main.jar` unpack, every native artifact
+  x86-64. Google serves `linux_x86_64` and both darwin builds, so the `linux_aarch64` URL we'd need
+  404s.
 - **The missing arm64 build is only the first of four problems** with that route:
 
   | What | Why it hurts here |
   | --- | --- |
   | no Linux arm64 build | the native arm64 build leg can't run it at all |
-  | 87 MB on first use | lands in `$HOME/.android/bin`, outside every `CH_BUILD_CACHE_*` path |
+  | 239 MB on first use | lands in `$ANDROID_USER_HOME` (default `$HOME/.android`), outside every `CH_BUILD_CACHE_*` path |
   | writes one license file | `android-sdk-license` only, where `sdkmanager --licenses` writes seven |
   | metrics on by default | a per-call `--no-metrics` is the only off switch, so nothing to bake ([#quiet-ci-defaults](#quiet-ci-defaults)) |
 
@@ -208,6 +216,8 @@ build.
 - **The hold has a way out and gets re-checked weekly.** `scripts/check-android-sdk.sh` holds the
   pin instead of flagging it, and files an issue when either exit opens: a rev newer than the one
   the hold was assessed against, or that `linux_aarch64` URL starting to serve.
+- **Lifting the hold means dropping the delete, in the same change.** Rev 23's `sdkmanager` is a shim
+  over `bin/android`, so a pin bump that leaves the `rm` in place installs nothing.
 - **A local arm64 test cannot prove this.** An Apple Silicon host with OrbStack has x86-64 binfmt
   registered, so an x86-64 binary runs fine inside an arm64 container and a local check passes.
   That is exactly how this reached CI. See CLAUDE.md, *Validating arm64*.
@@ -565,8 +575,7 @@ build.
   | as a cache blob | 488 MiB with `zstd -T0 --long=30`, the flags `actions/cache` uses |
 
   Caching moves about 29% fewer bytes than re-fetching, which is the weaker half of the case. The
-  better half: a cache hit means no call to Google mid-build at all, which is the flakiness in #52
-  and the arm64 exposure in #63.
+  better half: a cache hit means no call to Google mid-build at all, which is the flakiness in #52.
 - **A half-restored cache is not repaired, it fails the build.** `_getInstalledNdkVersionsForGradle`
   decides "already installed" from the folder name under `$ANDROID_HOME/ndk` plus a
   `source.properties` inside it, and never looks at the toolchain. A partial restore passes that
