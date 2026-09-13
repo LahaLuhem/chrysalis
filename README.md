@@ -261,23 +261,42 @@ stable; otherwise each run mints a fresh one and installed builds can't update i
 
 </details>
 
-### Caching Gradle (optional, for speed)
+### Caching (optional, for speed)
 
-Gradle downloads its dependencies and its own distribution on the first build. Two paths are baked
-in so a build job can cache them across runs (`GRADLE_USER_HOME` is pinned to `/root/.gradle`):
+A cold build downloads a fair bit before it compiles anything. Three paths are baked in as
+variables so your build job can cache them without hardcoding a location. They're hints, nothing
+in the image reads them.
 
-| Variable | Points to |
-| --- | --- |
-| `CH_BUILD_CACHE_GRADLE_MODULES` | `$GRADLE_USER_HOME/caches/modules-2`, the downloaded dependencies |
-| `CH_BUILD_CACHE_GRADLE_DISTS` | `$GRADLE_USER_HOME/wrapper/dists`, the Gradle distribution the wrapper fetches |
+| Variable | Points to | What it saves you |
+| --- | --- | --- |
+| `CH_BUILD_CACHE_GRADLE_MODULES` | `$GRADLE_USER_HOME/caches/modules-2` | the dependencies Gradle downloads |
+| `CH_BUILD_CACHE_GRADLE_DISTS` | `$GRADLE_USER_HOME/wrapper/dists` | the Gradle distribution the wrapper fetches |
+| `CH_BUILD_CACHE_NDK` | `$ANDROID_HOME/ndk` | the NDK, about 690 MiB on every cold build |
 
-These are deliberately narrow: caching all of `~/.gradle` would also drag in daemon logs, lock
-files, and execution history you don't want.
+The two Gradle ones are narrow on purpose (`GRADLE_USER_HOME` is pinned to `/root/.gradle`).
+Caching all of `~/.gradle` would drag in daemon logs, lock files and execution history you don't
+want.
 
-> **Mind the cache size.** The dependency cache (`modules-2`) can run to several GB. On a
-> single-project ephemeral runner that's usually fine, but check that caching it (uploaded and
-> downloaded every run) actually beats re-fetching, otherwise the cache itself becomes the
-> bottleneck.
+> **Cache the whole NDK folder or none of it.** A half-restored one doesn't get repaired. The build
+> runs for a few minutes and then dies looking for `llvm-strip`. If you see that, clear the cache.
+> The path is fixed too, `ANDROID_NDK_ROOT` won't move it.
+
+> **Check the trade actually pays.** `modules-2` can run to several GB, and a compressed NDK is
+> around 490 MiB against the 690 MiB download it spares you. That's a win if your cache store is
+> closer than Google is, and a waste if it isn't. Measure it on your own runner.
+
+<details>
+<summary>Why an app with no native code pulls the NDK at all</summary>
+
+Flutter asks for it on purpose. Your app ships prebuilt engine `.so` files, and the Android Gradle
+plugin wants to strip debug symbols out of them before packaging. It only fetches the NDK on its
+own when it thinks it has to *compile* something native, so Flutter hands it an empty CMake project
+to make it fetch anyway. Flutter's own comment calls this "tricking" AGP.
+
+Net effect: roughly 690 MiB down and 3 GB on disk, so that one 6 MB stripping tool can run. We
+don't bake it, for reasons in [APPENDIX.md](APPENDIX.md#ndk-cmake-not-baked).
+
+</details>
 
 ## Architecture support
 

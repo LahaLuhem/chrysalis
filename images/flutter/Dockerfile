@@ -77,11 +77,15 @@ COPY --chmod=0755 scripts/ /usr/local/bin/
 ENV CH_BUILD_DART_DEFINE_FILE=lib/env/dart_defines.env \
     CH_BUILD_CACHE_KEYSTORE=android/app/ch-signing.p12
 
-# Gradle caches nothing at build time; these name the two directories a build job should cache for
-# speed, kept deliberately narrow (not all of ~/.gradle, which also holds daemon logs, lock files,
-# and execution history). GRADLE_USER_HOME is pinned to its default so both paths resolve
-# deterministically. These are hints for the user's cache config; the helper never reads them.
+# Cache hints for the user's build job. Nothing in the image reads them.
+# Narrow on purpose: all of ~/.gradle would drag in daemon logs and lock files too.
+# GRADLE_USER_HOME is pinned to its default so both paths resolve the same every run.
 # See ../../APPENDIX.md#build-setup-android.
 ENV GRADLE_USER_HOME=/root/.gradle
 ENV CH_BUILD_CACHE_GRADLE_MODULES=${GRADLE_USER_HOME}/caches/modules-2 \
     CH_BUILD_CACHE_GRADLE_DISTS=${GRADLE_USER_HOME}/wrapper/dists
+
+# The NDK isn't baked (../../APPENDIX.md#ndk-cmake-not-baked), so a cold build pulls ~690 MiB of it.
+# Cache all of this dir or none of it: a half-restored one isn't repaired, it fails the build.
+# Fixed path, ANDROID_NDK_ROOT won't move it (flutter_tools only looks under ANDROID_HOME).
+ENV CH_BUILD_CACHE_NDK=${ANDROID_HOME}/ndk

@@ -54,9 +54,8 @@ commandTests:
       - 'CH_BUILD_DEFINE'
       - '--out'
 
-# The image ships with telemetry off and Flutter's version-freshness check skipped, and bakes the
-# two published paths the build-env helper writes/reads (see the flutter Dockerfile): assert those
-# env defaults are actually baked in.
+# Assert the baked env defaults are really there: telemetry off, version check skipped, and the
+# CH_BUILD_* paths a build job writes to or caches (see the flutter Dockerfile).
 metadataTest:
   envVars:
     - key: FLUTTER_SUPPRESS_ANALYTICS
@@ -73,3 +72,5 @@ metadataTest:
       value: "/root/.gradle/caches/modules-2"
     - key: CH_BUILD_CACHE_GRADLE_DISTS
       value: "/root/.gradle/wrapper/dists"
+    - key: CH_BUILD_CACHE_NDK
+      value: "/opt/android-sdk-linux/ndk"
