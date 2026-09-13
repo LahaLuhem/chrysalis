@@ -27,6 +27,7 @@ manifest_url='https://dl.google.com/android/repository/repository2-3.xml'
 # cmdline-tools is held behind the manifest on purpose. rev 23 swapped bin/sdkmanager for a shim
 # that hands every install to bin/android, which Google ships as x86-64 only, and the arm64 image
 # is built natively (AGENTS.md rule 4). Background: ../APPENDIX.md#no-android-cli.
+# Lifting this also means dropping the Dockerfile's `rm bin/android`: rev 23's sdkmanager needs it.
 #
 # A hold with no way out is just unverifiable prose, so it carries two exits and both get checked
 # below: a rev nobody has assessed shows up, or Google starts serving a Linux arm64 Android CLI.
