@@ -1,7 +1,7 @@
-# AGENTS.md — `chrysalis`
+# AGENTS.md for `chrysalis`
 
 Tool-agnostic brief for any coding agent (Claude Code, Copilot, Cursor, Codex, …) working
-in this repo. Claude-Code-specific guidance lives in [CLAUDE.md](./CLAUDE.md); design
+in this repo. Claude-Code-specific guidance lives in [CLAUDE.md](./CLAUDE.md). Design
 rationale and rejected paths live in [`../APPENDIX.md`](../APPENDIX.md) (anchor-keyed).
 Read this first.
 
@@ -13,9 +13,9 @@ tracking the **latest stable Flutter** release.
 
 Two images:
 
-- **`android-sdk:latest`** — Ubuntu + Android `cmdline-tools`, `platform-tools`,
+- **`android-sdk:latest`**: Ubuntu + Android `cmdline-tools`, `platform-tools`,
   `build-tools`, a platform. The base layer.
-- **`flutter:<version>` / `flutter:<x.y>` / `flutter:stable`** — `FROM` the `android-sdk` image, clones
+- **`flutter:<version>` / `flutter:<x.y>` / `flutter:stable`**: `FROM` the `android-sdk` image, clones
   Flutter at the pinned version.
 
 It is a fork of [`davidmartos96/docker-images-flutter`](https://github.com/davidmartos96/docker-images-flutter),
@@ -23,7 +23,7 @@ itself a fork of the now-EOL
 [`cirruslabs/docker-images-flutter`](https://github.com/cirruslabs/docker-images-flutter).
 Why it exists: [`APPENDIX.md#why-multi-arch`](../APPENDIX.md#why-multi-arch).
 
-## Scope — what this repo is and is NOT
+## Scope: what this repo is and is NOT
 
 - **In scope:** building and publishing good OCI images (the Dockerfiles, the build/publish
   workflow, and version tracking), plus **inert, vendor-agnostic developer-experience helpers
@@ -35,22 +35,22 @@ Why it exists: [`APPENDIX.md#why-multi-arch`](../APPENDIX.md#why-multi-arch).
   no auto-running hooks, no runtime assumptions (an always-on env var or entrypoint that alters
   what every other command does, the reason `CI=true` was rejected:
   [`APPENDIX.md#quiet-ci-defaults`](../APPENDIX.md#quiet-ci-defaults)). The line: a helper you
-  opt into by name is fine; behaviour imposed on commands you did not opt into is not.
+  opt into by name is fine. Behaviour imposed on commands you did not opt into is not.
 
 ## Stack
 
-- **Docker Buildx** — multi-platform builds. The publish path uses a native runner matrix +
+- **Docker Buildx**: multi-platform builds. The publish path uses a native runner matrix +
   push-by-digest + `docker buildx imagetools create` manifest merge
   ([`APPENDIX.md#digest-merge-multiarch`](../APPENDIX.md#digest-merge-multiarch)).
-- **GitHub Actions** — `.github/workflows/`. Hosted runners: `ubuntu-latest` (amd64) +
-  `ubuntu-24.04-arm` (arm64; free for public repos). GitHub macOS runners are arm64
-  **macOS** and cannot build Linux arm64 images — never use them for that.
-- **GHCR** — `ghcr.io/lahaluhem` (lowercase; GHCR namespaces are lowercase).
-- **Renovate** — version tracking. `config:best-practices` (Mend-hosted) bumps the Flutter SDK
+- **GitHub Actions**: `.github/workflows/`. Hosted runners: `ubuntu-latest` (amd64) +
+  `ubuntu-24.04-arm` (arm64, free for public repos). GitHub macOS runners are arm64
+  **macOS** and cannot build Linux arm64 images, so never use them for that.
+- **GHCR**: `ghcr.io/lahaluhem` (lowercase, because GHCR namespaces are).
+- **Renovate**: version tracking. `config:best-practices` (Mend-hosted) bumps the Flutter SDK
   pin (custom manager + `flutter-version` datasource), the GitHub Actions pins, the `ubuntu`
-  base, and the CI lint tools hadolint + actionlint (custom manager + `github-releases`); opens
+  base, and the CI lint tools hadolint + actionlint (custom manager + `github-releases`). Opens
   PRs weekly. Config: `.github/renovate.jsonc`.
-- **Bash** — `scripts/test.sh` (local test suite).
+- **Bash**: `scripts/test.sh` (local test suite).
 - Pinned inputs live in **`versions.env`** (`DOCKER_TAG`, `FLUTTER_VERSION`).
 
 ## Repo layout
@@ -86,8 +86,8 @@ chrysalis/
    tied to a specific CI system, and runtime assumptions (anything that changes behaviour for
    commands the user did not opt into, the reason `CI=true` was rejected). See *Scope* and
    [`APPENDIX.md#build-setup-android`](../APPENDIX.md#build-setup-android).
-2. **Registry is `ghcr.io/lahaluhem`** (lowercase). The package names — `flutter`,
-   `android-sdk` — stay as-is.
+2. **Registry is `ghcr.io/lahaluhem`** (lowercase). The package names (`flutter`,
+   `android-sdk`) stay as-is.
 3. **`android-sdk` is the base for `flutter`.** When both build, the base's manifest list must be
    **published before** the `flutter` matrix starts. Order: build-android → merge-android →
    resolve-base → build-flutter → merge-flutter. The gate can skip android-sdk on its own, and the
@@ -96,26 +96,26 @@ chrysalis/
    on `ubuntu-24.04-arm`. The single-job QEMU `platforms: linux/amd64,linux/arm64` approach
    is the documented *fallback* only. macOS runners cannot build Linux arm64.
 5. **arm64 cannot build Android apps natively.** Google ships the Android *Linux* build
-   tools (`aapt2`, `cmake`, `ninja`, NDK, `adb`) as **x86-64-only**; `flutter build apk`
+   tools (`aapt2`, `cmake`, `ninja`, NDK, `adb`) as **x86-64-only**, so `flutter build apk`
    fails on native arm64 without x86 emulation. Native arm64 is fine for
    `flutter`/`dart`/test/analyze. **Never claim arm64 builds Android natively.** Evidence +
    implications: [`APPENDIX.md#arm64-android-build-limitation`](../APPENDIX.md#arm64-android-build-limitation).
 6. **Publishing is gated** to `master` pushes and manual `workflow_dispatch`. Pull requests
    build-validate without pushing. Rationale (shared-tag races):
    [`APPENDIX.md#publish-gating`](../APPENDIX.md#publish-gating).
-7. **Verify action/tool versions against their registries before pinning** — never from
+7. **Verify action/tool versions against their registries before pinning**, never from
    memory (GitHub API `releases/latest`, Docker Hub, pub.dev). See
    `~/.claude/rules/dependency-versions.md`.
 8. **Never report a multi-arch publish as successful without `docker manifest inspect <ref>`
    showing BOTH `linux/amd64` and `linux/arm64` *and* the index reporting the OCI media type**
    (`application/vnd.oci.image.index.v1+json`). `build-image.yml`'s merge job enforces this on every
-   publish (`scripts/assert_oci_registry.sh` + `crane validate`); rationale in
+   publish (`scripts/assert_oci_registry.sh` + `crane validate`). Rationale in
    [`APPENDIX.md#oci-native-images`](../APPENDIX.md#oci-native-images).
 9. **Keep version tracking arch-independent.** Renovate (`.github/renovate.jsonc`) watches the
-   stable Flutter channel and opens a weekly version-bump PR; merging republishes. Version
-   tracking stays platform-agnostic by design; never couple it to an arch.
+   stable Flutter channel and opens a weekly version-bump PR, and merging republishes. Version
+   tracking stays platform-agnostic by design, so never couple it to an arch.
 10. **Execute multi-step work incrementally: one sub-task at a time, pausing for review between
-    each.** Present a plan and wait for review before editing; then make one sub-task's change,
+    each.** Present a plan and wait for review before editing, then make one sub-task's change,
     show the result, and **stop** for review before starting the next. Approving the plan (or
     saying "go ahead") greenlights the **first** sub-task only, not the whole plan run
     end-to-end. Keep pausing between every step until the user explicitly says to stop. Never
@@ -129,7 +129,7 @@ chrysalis/
     build. Prove a `build-tools` bump with `scripts/test.sh apk`, which fails on any unexpected
     mid-build install. Measured numbers, and why re-proposing the NDK bake needs new evidence:
     [`APPENDIX.md#ndk-cmake-not-baked`](../APPENDIX.md#ndk-cmake-not-baked).
-12. **`lint` and `images-ok` are `master`'s required checks; don't rename them in isolation.**
+12. **`lint` and `images-ok` are `master`'s required checks. Don't rename them in isolation.**
     Renovate automerges the boring tier of dependency PRs, and GitHub auto-merge waits only on
     *required* checks, so renaming or dropping either job un-gates automerge silently. Touch one
     and update `master`'s ruleset in the same pass:
@@ -140,7 +140,7 @@ chrysalis/
 1. `versions.env` pins `FLUTTER_VERSION` (and `DOCKER_TAG=stable`).
 2. On `master` / `workflow_dispatch`, `build_and_push.yml`:
    - builds `android-sdk` for each arch (native runner), pushes by digest, merges into
-     `android-sdk:latest`;
+     `android-sdk:latest`.
    - builds `flutter` for each arch `FROM` that manifest list, pushes by digest, merges into
      `flutter:<version>` + `flutter:<x.y>` + `flutter:stable`. `<x.y>` is derived from
      `FLUTTER_VERSION` and follows that line's newest patch
@@ -148,7 +148,7 @@ chrysalis/
 
    Each image runs only when the change touched its own paths
    ([`APPENDIX.md#publish-gating`](../APPENDIX.md#publish-gating)).
-3. Weekly, Renovate (`.github/renovate.jsonc`) checks the stable Flutter channel; if it moved, it
+3. Weekly, Renovate (`.github/renovate.jsonc`) checks the stable Flutter channel. If it moved, it
    opens a PR bumping `versions.env`. Merging triggers a republish. Anything under a major automerges
    once `lint` + `images-ok` are green, so that republish can happen unattended. Majors wait for a
    human ([`APPENDIX.md#renovate-automerge`](../APPENDIX.md#renovate-automerge)).
@@ -179,21 +179,21 @@ actionlint, shellcheck, biome) run from the [`Linterpol`](https://github.com/Lah
 image (`ghcr.io/lahaluhem/linterpol`, its own repo), which `test.sh` pulls on demand, so the
 tools need not be installed on the host and every run uses the same pinned versions. The
 default tracks Linterpol's `1` major line and is digest-pinned, so a run is reproducible while
-Renovate raises the digest bump per upstream release; override it with `LINTERPOL_IMAGE` (e.g. a
+Renovate raises the digest bump per upstream release. Override it with `LINTERPOL_IMAGE` (e.g. a
 local `linterpol:local` build). `container-structure-test` (used by the `image` target) runs
-from that same image too; since it inspects a built image, that step mounts the host's Docker
+from that same image too. Since it inspects a built image, that step mounts the host's Docker
 socket into the container. Beyond Docker itself, the only host tool the suite still needs is
 `jq`, for the opt-in `multiarch` target.
 
 ## Code style (no separate CODESTYLE.md yet)
 
-The code surface is small; until a `CODESTYLE.md` is warranted, follow:
+The code surface is small, so until a `CODESTYLE.md` is warranted, follow:
 
-- **Dockerfiles:** one `RUN` per logical stage, chained with `&&`; clean apt lists in the
+- **Dockerfiles:** one `RUN` per logical stage, chained with `&&`. Clean apt lists in the
   same layer (`rm -rf /var/lib/apt/lists/*`). Keep arch guards explicit
   (`if [ "$(uname -m)" = "x86_64" ]; then …; fi`).
-- **Workflow YAML:** 2-space indent; pin actions to a major tag (`@v7`); keep `run:` blocks
+- **Workflow YAML:** 2-space indent, actions pinned to a major tag (`@v7`), and `run:` blocks kept
   `actionlint`/shellcheck-clean, marking intentional word-splitting with
   `# shellcheck disable=SCxxxx`.
-- **Bash:** `set -e`; quote expansions; use only POSIX `sh` features where the shebang is
+- **Bash:** `set -e`, quoted expansions, and only POSIX `sh` features where the shebang is
   `#!/bin/sh`.

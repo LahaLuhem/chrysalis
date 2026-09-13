@@ -16,6 +16,7 @@
 - [Version tracking via Renovate, not a bespoke cron](#renovate-version-tracking)
 - [Renovate automerges the boring tier, gated on one stable check](#renovate-automerge)
 - [`build-tools` is baked to match AGP; the NDK and CMake are deliberately not](#ndk-cmake-not-baked)
+- [The NDK cache is a path we name, not a smaller NDK we ship](#ndk-cache-not-pruned)
 - [Quiet-by-default: telemetry off, version check skipped](#quiet-ci-defaults)
 - [DX CLIs are compiled to native binaries, not `pub global activate`](#dx-tools-native)
 - [Build-env setup helpers: `ch-build-setup-android` + `ch-fetch-firebase-config`](#build-setup-android)
@@ -558,7 +559,7 @@ verified. A present manifest is not a verified build.
 
   | Package | Download | Installed | Pulled because |
   | --- | --- | --- | --- |
-  | `ndk;28.2.13676358` | 722 MB | **2,207 MB** | the app template sets `ndkVersion = flutter.ndkVersion`; AGP wants the NDK even with zero native code |
+  | `ndk;28.2.13676358` | 688.8 MiB | **2.92 GiB** | the app template sets `ndkVersion = flutter.ndkVersion`, and Flutter makes AGP fetch it even with zero native code ([#ndk-cache-not-pruned](#ndk-cache-not-pruned)) |
   | `cmake;3.22.1` | 22 MB | 60 MB | AGP's built-in default, fetched alongside the NDK although a template app has no Android CMake project (its only `CMakeLists.txt` are Linux/Windows desktop) |
 
 - **The `apk` target caches the NDK in a named volume** (`chrysalis-test-ndk`) mounted at
@@ -585,6 +586,60 @@ verified. A present manifest is not a verified build.
 - **Guard:** `scripts/test.sh apk` fails if Gradle installs anything under `/opt` except the NDK or
   CMake, turning a pin that drifts from AGP's request into a red test rather than a silent
   per-build download. That allowlist is this decision in executable form.
+- **What consumers get instead of a bake:** the path, as `CH_BUILD_CACHE_NDK`
+  ([#ndk-cache-not-pruned](#ndk-cache-not-pruned)).
+
+---
+
+<a id="ndk-cache-not-pruned"></a>
+## The NDK cache is a path we name, not a smaller NDK we ship
+
+- **Decision:** bake `CH_BUILD_CACHE_NDK=$ANDROID_HOME/ndk` so a build job can cache that folder,
+  and leave what's inside it alone. Shipping a trimmed NDK was measured and rejected (below).
+- **Why the NDK gets pulled at all, with zero native code in the app.** Flutter asks for it on
+  purpose. `FlutterPluginUtils.forceNdkDownload` points `externalNativeBuild.cmake.path` at an empty
+  `gradle/src/main/scripts/CMakeLists.txt` whose own comment says it exists "to trick the Android
+  Gradle Plugin to download the NDK". AGP needs the NDK to strip debug symbols out of the engine's
+  prebuilt `.so`, but only fetches it by itself when it thinks it has to *compile* something native.
+- **What it costs**, measured on `flutter:stable` 3.47.4, NDK `28.2.13676358`:
+
+  | | |
+  | --- | --- |
+  | download from Google | 688.8 MiB (repository manifest) |
+  | unpacked on disk | 2.92 GiB over 8,450 files, no symlinks and no hardlinks, so `clang`, `clang++` and `clang-19` are three identical 135 MB copies |
+  | as a cache blob | 488 MiB with `zstd -T0 --long=30`, the flags `actions/cache` uses |
+
+  Caching moves about 29% fewer bytes than re-fetching, which is the weaker half of the case. The
+  better half: a cache hit means no call to Google mid-build at all, which is the flakiness in #52
+  and the arm64 exposure in #63.
+- **A half-restored cache is not repaired, it fails the build.** `_getInstalledNdkVersionsForGradle`
+  decides "already installed" from the folder name under `$ANDROID_HOME/ndk` plus a
+  `source.properties` inside it, and never looks at the toolchain. A partial restore passes that
+  check, skips provisioning, then dies minutes later on a missing `llvm-strip`. Hence the
+  all-or-nothing wording in the README. That same function reads `$ANDROID_HOME/ndk` and nothing
+  else, so `ANDROID_NDK_ROOT` will not relocate the cache.
+- **Pruning: measured, rejected on the native-code case.** A template app runs exactly one thing out
+  of that 2.92 GiB, `llvm-strip` (5.9 MB, byte-identical to `llvm-objcopy`, it's one multi-call
+  binary). Four `flutter build apk --debug` runs, same image, varying only the ndk dir:
+
+  | ndk dir | pure-Dart app | app with native code |
+  | --- | --- | --- |
+  | full, 2.92 GiB | green, APK 150,414,216 B | green, fetches CMake |
+  | `source.properties` only, 24 KB | fails at `:app:stripDebugDebugSymbols` | not run |
+  | `llvm-strip` + `llvm-objcopy`, 11.3 MB | green, same APK byte for byte | not run |
+  | `llvm-strip` only, 5.6 MB | green, same APK byte for byte | **fails** `[CXX1429]` at `configureCMakeDebug`, and never re-downloads |
+
+  So a pruned NDK is not a small NDK, it is a broken one that the check reports as present. Baking
+  it would turn "fetches what it needs" into "hard fails" for anyone with an ffi plugin or a CMake
+  build, which is not a trade a published image gets to make for its users. Offering it as an
+  opt-in helper has the same hole, plus it would pin us to AGP's current choice of `llvm-strip`, so
+  an AGP that reaches for a different tool breaks every opted-in consumer at once. Scope: `--debug`
+  only, one host.
+- **Build upward:** a good cache key wants the NDK version, which today only lives in
+  `gradle_utils.dart` ([#ndk-cmake-not-baked](#ndk-cmake-not-baked) has the path). Keying on the
+  Flutter version works but throws the cache away on every patch bump. Exposing it is not a
+  one-liner, because Dockerfile `ENV` cannot take a value from a `RUN`, so it needs a file, a build
+  arg, or another helper. Not worth building until someone asks.
 
 ---
 
