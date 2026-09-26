@@ -16,6 +16,13 @@ commandTests:
     command: dart
     args: ['--version']
     exitCode: 0
+  # An owner above 65535 makes the layer fail to extract on userns-remapped, rootless and
+  # unprivileged-LXC Docker hosts. Scans the whole image, so it guards android-sdk's layers too.
+  # APPENDIX.md#root-owned-sdk
+  - name: no file is owned by a UID or GID above 65535
+    command: sh
+    args: ['-c', 'out="$(find / -xdev \( -uid +65535 -o -gid +65535 \) -print -quit)" && test -z "$out"']
+    exitCode: 0
   # DX CLIs from the flutter Dockerfile's "Flutter DX tooling" layer: prove they're on PATH and
   # run. Version-agnostic on purpose (Renovate bumps them), and --help is the stable exit-0 call.
   - name: cider runs (changelog + version-bump DX tool)
