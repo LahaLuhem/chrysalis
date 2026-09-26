@@ -6,6 +6,7 @@
 - [The Android emulator isn't shipped](#no-emulator)
 - [cmdline-tools stays at rev 22, and the image deletes `bin/android`](#no-android-cli)
 - [Flutter is installed by `git clone`, not the release tarball](#flutter-clone-not-tarball)
+- [Everything under the Flutter SDK is owned by root](#root-owned-sdk)
 - [Multi-arch via native matrix + push-by-digest + manifest merge](#digest-merge-multiarch)
 - [OCI-native images](#oci-native-images)
 - [Publishing is gated to `master` and manual dispatch](#publish-gating)
@@ -258,6 +259,27 @@ build.
 - **Rejected: download the x64 tarball and hand-swap an arm64 Dart SDK.** Unsupported, and the
   tarball's framework expects its bundled Dart, while the clone's bootstrap is the maintained path that
   resolves the correct Dart per arch.
+
+---
+
+<a id="root-owned-sdk"></a>
+## Everything under the Flutter SDK is owned by root
+
+- **Decision:** the precache `RUN` ends with a `find … -exec chown -h 0:0`, re-owning anything under
+  `FLUTTER_HOME` that isn't `root:root`.
+- **Why:** `flutter precache` unpacks its artifact tarballs as root, and GNU tar running as root keeps
+  each file's recorded owner. The `gradle_wrapper` artifact carries its build machine's `397546:5000`,
+  so 3.47.5 shipped five files with that owner. A Docker host whose ID map stops at 65535
+  (userns-remap, rootless, an unprivileged LXC) can't `lchown` to it, so the layer fails to
+  extract and the pull fails with `failed to Lchown … invalid argument`. Hosts with the full ID
+  range pull it fine, which is why it goes unnoticed.
+- **Why in the same `RUN`:** a `chown` in a later layer is too late. The bad owner is already baked
+  into the earlier layer, and the host has to extract that one first.
+- **Why `find` and not `chown -R`:** chowning a file from the clone layer copies it up into this
+  layer. `chown -R` over the whole SDK would duplicate the checkout. `find` touches only the files
+  that are wrong, so the layer grows by nothing.
+- **Guard:** `structure-test.yaml` fails the build if any file in the image has a UID or GID above
+  65535.
 
 ---
 

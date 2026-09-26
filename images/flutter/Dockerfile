@@ -29,10 +29,12 @@ ENV FLUTTER_SUPPRESS_ANALYTICS=true \
 
 RUN git clone --depth 1 --branch ${FLUTTER_VERSION} https://github.com/flutter/flutter.git ${FLUTTER_HOME}
 
-# No chown here: the clone above already runs as root, so re-adding one would be a no-op.
-# No --android-licenses either: the base image already accepted the full set (APPENDIX.md#no-android-cli).
+# precache extracts artifact tarballs as root, which keeps their build host's owner (a UID above
+# 65535). Re-own them in this same layer so it extracts under userns. APPENDIX.md#root-owned-sdk
+# No --android-licenses: the base image already accepted the full set (APPENDIX.md#no-android-cli).
 RUN flutter doctor \
-    && flutter precache --android
+    && flutter precache --android \
+    && find "$FLUTTER_HOME" \( ! -user 0 -o ! -group 0 \) -exec chown -h 0:0 {} +
 
 # --- Flutter DX tooling: native CLIs on PATH (DX only, not needed to build) ---
 # cider: version bumps + CHANGELOG. dependency_validator: flags missing/unused/mis-promoted deps.
