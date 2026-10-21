@@ -4,7 +4,7 @@ Code-style conventions for this repo, for humans and coding agents alike: Docker
 workflow YAML, Bash, and the single-source-of-truth rule for version pins. Project facts and
 hard rules live in [AGENTS.md](AGENTS.md). Design rationale lives in [APPENDIX.md](APPENDIX.md).
 
-Two habits cut across everything:
+A few habits cut across everything:
 
 - **Comments explain *why*, not *what*, in one or two lines.** The hairier the layer, the more
   it earns a comment, but one that needs a paragraph is rationale: push it into an
@@ -27,12 +27,12 @@ Two habits cut across everything:
 - Pin every upstream `FROM` as `tag@sha256:<digest>`: the tag is the readable version, the
   digest makes the build reproducible. Our own base is `FROM ${base_ref}`, and CI feeds it a
   resolved digest (`APPENDIX.md#pinned-base`). The tag default is only for local builds.
-- `USER root`, since these are build/CI images, not services (DL3002 on purpose).
-- `LABEL org.opencontainers.image.source` + `.description` near the top.
+- No `USER` line. They're build/CI images, not services, so they run as root, inherited from ubuntu.
+- No `LABEL`s. `docker/metadata-action` in the workflow sets them (`APPENDIX.md#oci-native-images`).
 - `ENV` names are UPPERCASE and grouped with `\` continuation. `ARG` names are lowercase
   (`flutter_version`). Keep related vars in one block.
 - Collapse apt into one layer ending in `rm -rf /var/lib/apt/lists/*`, and use
-  `--no-install-recommends` (the inherited JDK block omits it by design, DL3015).
+  `--no-install-recommends`.
 - Guard arch-specific steps on `uname -m` (`aarch64` / `x86_64`) and say why in a comment
   (e.g. only arm64 needs the x86-64 libs). Never assume the build arch.
 - Every `.hadolint.yaml` ignore is a deliberate, commented choice. Don't blanket-mute, and
@@ -81,14 +81,8 @@ bump and the two silently disagree.
   `images/android-sdk/Dockerfile`. Everywhere else (comments, `LABEL`s, the README) write
   `ubuntu` with no version.
 - Renovate owns the bumps (`.github/renovate.jsonc`). `config:best-practices` auto-tracks the
-  `FROM` digests and action SHAs. A custom manager handles the rest (the Flutter pin, the
-  Linterpol lint image), which each need a `# renovate: datasource=... depName=...` line
-  directly above the pin.
-- Exception: the Flutter DX CLIs (`cider`, `dependency_validator`) are pinned inline on the
-  chained `dart pub global activate` RUN in `images/flutter/Dockerfile` and tracked by a
-  `datasourceTemplate: dart` custom manager with no `# renovate:` marker (a marker between the
-  consecutive `RUN`s would trip hadolint DL3059). To add another, append
-  `&& dart pub global activate <pkg> <x.y.z>` to that RUN, and the manager picks it up.
+  `FROM` digests and action SHAs. Custom managers handle every other pin, each keyed on a
+  `# renovate: datasource=... depName=...` line directly above it.
 - Don't hand-edit a tracked pin (`versions.env`'s `FLUTTER_VERSION` included) unless the user
   asks. That's Renovate's job. Any pin you do touch, verify against the upstream registry,
   never from memory.
