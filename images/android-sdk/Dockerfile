@@ -11,7 +11,6 @@ FROM ubuntu:26.04@sha256:f144425ff09be612d6d9ad965196e9cdc23dae1f42110a8a11a3e9a
 
 # OCI labels + annotations are workflow-owned (docker/metadata-action in build-image.yml),
 # not baked here. See APPENDIX.md#oci-native-images.
-USER root
 
 ENV ANDROID_HOME=/opt/android-sdk-linux \
     LANG=en_US.UTF-8 \
@@ -28,8 +27,6 @@ ENV ANDROID_SDK_ROOT=$ANDROID_HOME \
 ENV ANDROID_SDK_TOOLS_VERSION=15859902
 
 # --- Build toolchain: system packages --------------------------------------
-# JDK + the deps to fetch and build with the Android SDK. jq and lcov are the
-# Convenience (DX) tools (see "What's in the image" in the README).
 # Headless JDK: Android/Gradle builds need no GUI libs (AWT runs headless), and the full
 # JDK's recommends add ~500 MB. No build-essential: the NDK bundles its own toolchain,
 # so nothing here invokes host gcc/make.
@@ -41,23 +38,14 @@ RUN apt-get update \
     && apt-get install -y jq lcov --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-# JAVA_HOME for the JDK installed above. TARGETARCH (amd64/arm64) is set by Buildx and
-# matches Ubuntu's /usr/lib/jvm/java-21-openjdk-<arch> layout, and the "21" mirrors the
-# openjdk-21-jdk-headless pin above. Tools that read JAVA_HOME (Gradle, flutter doctor)
-# then resolve the JDK deterministically instead of guessing via PATH.
+# So Gradle and flutter doctor find the JDK without guessing from PATH.
+# TARGETARCH matches Ubuntu's java-21-openjdk-<arch> dirs, and the 21 has to match the JDK package above.
 ARG TARGETARCH
 ENV JAVA_HOME=/usr/lib/jvm/java-21-openjdk-${TARGETARCH}
 
 # --- Build toolchain: x86-64 runtime libs for emulated Android tools (arm64) -
-# Google ships the Android Linux build tools (aapt2, zipalign, ...) as x86-64 ELF
-# only, so on arm64 they run solely under host x86-64 emulation (Apple Silicon
-# Docker/OrbStack does this transparently, while other arm64 Linux registers QEMU once with
-# `docker run --privileged --rm tonistiigi/binfmt --install amd64`). This set is
-# the empirical minimum the emulated tools load: libc6 + libgcc-s1 cover aapt2,
-# zipalign, cmake and ninja. zlib1g (libz.so.1) is what the NDK clang needs for
-# the default app's CMake step. libc++ is bundled in build-tools/lib64, and
-# nothing links libstdc++.so.6. Emulated, NOT native Android. amd64 is
-# unaffected. See ../../APPENDIX.md#arm64-android-build-limitation.
+# Google ships the Android build tools as x86-64 only, so arm64 runs them under the host's emulation.
+# These are the x86-64 libs they load. ../../APPENDIX.md#arm64-android-build-limitation
 RUN if [ "$(uname -m)" = "aarch64" ]; then \
       set -eux; \
       codename="$(awk -F= '$1=="VERSION_CODENAME"{print $2}' /etc/os-release)"; \
@@ -80,7 +68,7 @@ RUN cd /opt \
     && mkdir -p "${ANDROID_HOME}/cmdline-tools/" \
     && unzip -q android-sdk-tools.zip -d "${ANDROID_HOME}/cmdline-tools/" \
     && mv "${ANDROID_HOME}/cmdline-tools/cmdline-tools" "${ANDROID_HOME}/cmdline-tools/latest" \
-    # x86-64 only, and flutter_tools would pick it just for existing. APPENDIX.md#no-android-cli
+    # x86-64 only, and flutter_tools would pick it just because it's there. APPENDIX.md#no-android-cli
     && rm "${ANDROID_HOME}/cmdline-tools/latest/bin/android" \
     && chown -R root:root "$ANDROID_HOME" \
     && rm android-sdk-tools.zip
@@ -103,9 +91,8 @@ RUN yes | sdkmanager \
     "build-tools;$ANDROID_BUILD_TOOLS_VERSION"
 
 # --- Convenience (DX): yq -----------------------------------------------------
-# The jq for YAML, handy for poking at Flutter project config (pubspec.yaml,
-# dependency_validator.yaml, slang, ...). Static Go binary from mikefarah/yq, arch-matched
-# (its amd64/arm64 asset names are exactly Docker's TARGETARCH). Renovate-tracked (github-releases).
+# The jq for YAML, handy for Flutter project config (pubspec.yaml, slang, ...).
+# yq names its release assets by arch exactly like TARGETARCH, so one URL fits both.
 # renovate: datasource=github-releases depName=mikefarah/yq
 ENV YQ_VERSION=v4.54.1
 RUN wget -q "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_${TARGETARCH}" -O /usr/local/bin/yq \

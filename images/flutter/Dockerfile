@@ -5,7 +5,6 @@ FROM ${base_ref}
 
 # OCI labels + annotations are workflow-owned (docker/metadata-action in build-image.yml),
 # not baked here. See APPENDIX.md#oci-native-images.
-USER root
 
 ARG flutter_version
 
@@ -18,36 +17,28 @@ ENV FLUTTER_ROOT=$FLUTTER_HOME
 ENV PUB_CACHE=/root/.pub-cache
 ENV PATH=${PATH}:${FLUTTER_HOME}/bin:${FLUTTER_HOME}/bin/cache/dart-sdk/bin:${PUB_CACHE}/bin
 
-# Quiet CI defaults, override with `-e BOT=false`. FLUTTER_SUPPRESS_ANALYTICS no-ops Flutter
-# analytics. BOT=true trips flutter+dart bot detection, which no-ops Dart analytics and skips
-# Flutter's version-freshness check.
-# Rationale, including why not CI=true: ../../APPENDIX.md#quiet-ci-defaults
-# BOT is an internal flutter_tools lever, not a documented one:
-# https://github.com/flutter/flutter/blob/stable/packages/flutter_tools/lib/src/base/bot_detector.dart
+# Quiet CI defaults: analytics off and no version-freshness check. Override with `-e BOT=false`.
+# BOT is an undocumented flutter_tools switch. ../../APPENDIX.md#quiet-ci-defaults
 ENV FLUTTER_SUPPRESS_ANALYTICS=true \
     BOT=true
 
 RUN git clone --depth 1 --branch ${FLUTTER_VERSION} https://github.com/flutter/flutter.git ${FLUTTER_HOME}
 
-# APPENDIX.md#root-owned-sdk
+# Why --no-same-owner: APPENDIX.md#root-owned-sdk
 # No --android-licenses: the base image already accepted the full set (APPENDIX.md#no-android-cli).
 RUN export TAR_OPTIONS=--no-same-owner \
     && flutter doctor \
     && flutter precache --android
 
 # --- Flutter DX tooling: native CLIs on PATH (DX only, not needed to build) ---
-# cider: version bumps + CHANGELOG. dependency_validator: flags missing/unused/mis-promoted deps.
-# Compiled to self-contained native executables, NOT `dart pub global activate`: activation leaves an
-# SDK-version-keyed snapshot (.../cider.dart-<sdk>.snapshot), so a shared or persisted PUB_CACHE that
-# outlives an SDK bump serves a stale snapshot and the tool breaks until re-activated. Native binaries
-# in /usr/local/bin don't touch PUB_CACHE and survive SDK upgrades. Why: ../../APPENDIX.md#dx-tools-native
-# Pinned exact and Renovate-bumped (dart custom manager in ../../.github/renovate.jsonc), like YQ_VERSION.
+# cider bumps versions and the CHANGELOG, dependency_validator flags missing, unused or misplaced deps.
+# Compiled to native binaries, since an activated tool breaks once its PUB_CACHE outlives an SDK bump.
+# ../../APPENDIX.md#dx-tools-native
 # renovate: datasource=dart depName=cider
 ENV CIDER_VERSION=0.2.10
 # renovate: datasource=dart depName=dependency_validator
 ENV DEPENDENCY_VALIDATOR_VERSION=5.1.0
-# Activate (resolve + download + generate package_config), compile the resolved entrypoint to a native
-# binary, then deactivate and drop the cache artifacts so the snapshot/sources don't ship in the image.
+# Activate only to fetch and resolve, then compile, and drop the cache so no snapshot or source ships.
 RUN set -eux; \
     dart pub global activate cider "$CIDER_VERSION"; \
     dart pub global activate dependency_validator "$DEPENDENCY_VALIDATOR_VERSION"; \
@@ -62,20 +53,12 @@ RUN set -eux; \
     rm -rf "${PUB_CACHE:?}/global_packages" "${PUB_CACHE:?}/bin" "${PUB_CACHE:?}/hosted"
 
 # --- Build-env setup helpers (DX only, not needed to build) ---
-# ch-build-setup-android materialises the files an Android `flutter build apk|aab` needs
-# (dart-define file, google-services.json, dev signing) from CH_BUILD_* env vars, delegating the
-# google-services fetch to ch-fetch-firebase-config (a standalone Firebase config fetcher, also
-# usable on its own). Both are inert and opt-in: they do nothing until explicitly invoked, so
-# non-build jobs pay nothing. The whole scripts/ dir is COPYed so adding another helper needs no
-# Dockerfile change, and --chmod makes them executable regardless of the checked-out file mode.
-# Why they live here and how they work: ../../APPENDIX.md#build-setup-android.
+# Each does nothing until a job calls it. ../../APPENDIX.md#build-setup-android
+# Copying the whole dir means a new helper needs no edit here. --chmod covers a lost exec bit.
 COPY --chmod=0755 scripts/ /usr/local/bin/
 
-# Published paths the helper writes and the user references (relative to the project root at
-# build time). Baked as the single env-visible source: the helper reads them, the build passes
-# CH_BUILD_DART_DEFINE_FILE to --dart-define-from-file, and CH_BUILD_CACHE_KEYSTORE is the path to
-# add to a build cache for a stable signing key. Inert (no other tool reads them), so this keeps
-# to the portable-image rule. See ../../APPENDIX.md#build-setup-android.
+# Paths the helpers write, relative to the project root.
+# Baked as ENV so the helpers and the build job read one value. ../../APPENDIX.md#build-setup-android
 ENV CH_BUILD_DART_DEFINE_FILE=lib/env/dart_defines.env \
     CH_BUILD_CACHE_KEYSTORE=android/app/ch-signing.p12
 
