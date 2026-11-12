@@ -7,7 +7,7 @@
 #   Build toolchain  JDK + the Android SDK (everything below)
 #   Convenience (DX) jq, lcov, yq
 # The flutter image adds the Flutter layer on top.
-FROM ubuntu:26.04@sha256:f144425ff09be612d6d9ad965196e9cdc23dae1f42110a8a11a3e9a8198759f7
+FROM ubuntu:26.04@sha256:065aa8626841f16057b78b027b464cd59c4fac36c204c72dcbf48d66f5fa8a96
 
 # OCI labels + annotations are workflow-owned (docker/metadata-action in build-image.yml),
 # not baked here. See APPENDIX.md#oci-native-images.
@@ -94,6 +94,6 @@ RUN yes | sdkmanager \
 # The jq for YAML, handy for Flutter project config (pubspec.yaml, slang, ...).
 # yq names its release assets by arch exactly like TARGETARCH, so one URL fits both.
 # renovate: datasource=github-releases depName=mikefarah/yq
-ENV YQ_VERSION=v4.54.1
+ENV YQ_VERSION=v4.54.3
 RUN wget -q "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_${TARGETARCH}" -O /usr/local/bin/yq \
     && chmod +x /usr/local/bin/yq
